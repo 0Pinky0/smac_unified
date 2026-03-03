@@ -21,7 +21,7 @@ TEST_FUNCTIONS = [
     ),
     (
         'tests.test_native_builders',
-        'test_reward_handler_uses_frame_deltas_and_scaling',
+        'test_reward_handler_uses_frame_deltas_without_scaling',
     ),
     (
         'tests.test_native_builders',
@@ -66,6 +66,18 @@ TEST_FUNCTIONS = [
     (
         'tests.test_obs_state_parity',
         'test_capability_handlers_append_capability_channels',
+    ),
+    (
+        'tests.test_reward_outcome_parity',
+        'test_step_scales_terminal_reward_after_win_bonus',
+    ),
+    (
+        'tests.test_reward_outcome_parity',
+        'test_timeout_counts_and_omits_episode_limit_when_not_continuing',
+    ),
+    (
+        'tests.test_reward_outcome_parity',
+        'test_timeout_sets_episode_limit_flag_when_continuing',
     ),
 ]
 

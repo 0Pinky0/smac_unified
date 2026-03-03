@@ -151,7 +151,7 @@ def test_action_handler_avail_masks_are_deterministic():
     assert mask_a[6] == 1
 
 
-def test_reward_handler_uses_frame_deltas_and_scaling():
+def test_reward_handler_uses_frame_deltas_without_scaling():
     frame = UnitFrame(
         allies=_team_frame(
             [_tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=40)]
@@ -174,26 +174,11 @@ def test_reward_handler_uses_frame_deltas_and_scaling():
         attack_slots=1,
         reward_scale=False,
     )
-    scaled_ctx = _context(
-        env=None,
-        n_agents=1,
-        n_enemies=1,
-        n_actions=7,
-        n_actions_no_attack=6,
-        attack_slots=1,
-        reward_scale=True,
-        max_reward=100.0,
-        reward_scale_rate=20.0,
-    )
-
     reward_handler = DefaultRewardHandler()
     reward_handler.reset(frame=frame, context=unscaled_ctx)
     unscaled = reward_handler.build_step_reward(frame=frame, context=unscaled_ctx)
-    reward_handler.reset(frame=frame, context=scaled_ctx)
-    scaled = reward_handler.build_step_reward(frame=frame, context=scaled_ctx)
 
     assert np.isclose(unscaled, 5.0)
-    assert np.isclose(scaled, 1.0)
 
 
 def test_observation_and_state_handlers_follow_unified_contract():

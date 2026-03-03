@@ -170,6 +170,12 @@ class SMACEnv:
         self._episode_steps = 0
         self._total_steps = 0
         self._episode_count = 0
+        self.battles_won = 0
+        self.battles_game = 0
+        self.timeouts = 0
+        self.force_restarts = 0
+        self.win_counted = False
+        self.defeat_counted = False
         self._obs = None
         self._opponent_obs = None
         self._latest_timesteps = []
@@ -259,6 +265,8 @@ class SMACEnv:
         self._episode_steps = 0
         self.reward = 0.0
         self.last_action.fill(0.0)
+        self.win_counted = False
+        self.defeat_counted = False
         if self.fov_directions.shape[0] == self.n_agents:
             self.fov_directions.fill(0.0)
             self.fov_directions[:, 0] = 1.0
@@ -359,27 +367,42 @@ class SMACEnv:
             frame=self._unit_frame,
             context=self._handler_context,
         )
-        info = {'battle_won': False}
+        dead_allies = int(np.sum(~self._unit_frame.allies.alive))
+        dead_enemies = int(np.sum(~self._unit_frame.enemies.alive))
+        info = {
+            'battle_won': False,
+            'dead_allies': dead_allies,
+            'dead_enemies': dead_enemies,
+        }
         battle_code = self._battle_outcome_code()
         if battle_code is not None:
             terminated = True
-            if battle_code == 1:
+            self.battles_game += 1
+            if battle_code == 1 and not self.win_counted:
+                self.battles_won += 1
+                self.win_counted = True
                 info['battle_won'] = True
                 if not self.reward_sparse:
                     reward += self.reward_win
                 else:
                     reward = 1.0
-            elif battle_code == -1:
+            elif battle_code == -1 and not self.defeat_counted:
+                self.defeat_counted = True
                 if not self.reward_sparse:
                     reward += self.reward_defeat
                 else:
                     reward = -1.0
         elif self._episode_steps >= self.episode_limit:
             terminated = True
-            info['episode_limit'] = True
+            if self.continuing_episode:
+                info['episode_limit'] = True
+            self.battles_game += 1
+            self.timeouts += 1
 
         if terminated:
             self._episode_count += 1
+        if self.reward_scale and self.max_reward > 0 and self.reward_scale_rate > 0:
+            reward /= self.max_reward / self.reward_scale_rate
         self.reward = float(reward)
         return float(reward), bool(terminated), info
 
