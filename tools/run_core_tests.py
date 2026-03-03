@@ -79,6 +79,18 @@ TEST_FUNCTIONS = [
         'tests.test_reward_outcome_parity',
         'test_timeout_sets_episode_limit_flag_when_continuing',
     ),
+    (
+        'tests.test_reset_capability_parity',
+        'test_reset_capabilities_apply_episode_vectors_and_payload',
+    ),
+    (
+        'tests.test_reset_capability_parity',
+        'test_split_raw_units_applies_health_and_enemy_masks',
+    ),
+    (
+        'tests.test_reset_capability_parity',
+        'test_stochastic_attack_probability_can_block_attack_command',
+    ),
 ]
 
 

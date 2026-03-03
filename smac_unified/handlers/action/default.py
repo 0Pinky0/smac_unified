@@ -153,6 +153,8 @@ class DefaultActionHandler(ActionHandler):
             if slot < 0 or slot >= len(targets):
                 return None
             target = targets[slot]
+            if self._stochastic_attack_miss(context=context, agent_id=agent_id):
+                return None
             ability_id = (
                 _ACTIONS['heal']
                 if self._is_healer(unit=unit, context=context)
@@ -305,6 +307,28 @@ class DefaultActionHandler(ActionHandler):
         if unit_type in ids and ids[unit_type] > 0:
             return max(float(ids[unit_type]), 0.1)
         return default_range
+
+    @staticmethod
+    def _stochastic_attack_miss(
+        *,
+        context: HandlerContext,
+        agent_id: int,
+    ) -> bool:
+        env = context.env
+        if env is None:
+            return False
+        probs = getattr(env, 'agent_attack_probabilities', None)
+        if probs is None or agent_id >= len(probs):
+            return False
+        success_prob = float(probs[agent_id])
+        if success_prob >= 1.0:
+            return False
+        if success_prob <= 0.0:
+            return True
+        rng = getattr(env, '_rng', None)
+        if rng is None:
+            rng = np.random.default_rng()
+        return float(rng.uniform()) > success_prob
 
 
 class ClassicActionHandler(DefaultActionHandler):

@@ -112,6 +112,7 @@ class SMACEnv:
         self.shield_bits_enemy = 1 if self.map_params.b_race == 'P' else 0
         self.unit_type_bits = int(self.map_params.unit_type_bits)
         self._seed = self._env_kwargs.get('seed')
+        self._rng = np.random.default_rng(self._seed)
         default_handlers = build_default_handler_bundle(
             switches=self.switches,
             map_params=self.map_params,
@@ -194,6 +195,13 @@ class SMACEnv:
         self._action_eye = np.eye(self.n_actions, dtype=np.float32)
         self.pathing_grid: np.ndarray | None = None
         self.terrain_height: np.ndarray | None = None
+        self.agent_attack_probabilities = np.ones(self.n_agents, dtype=np.float32)
+        self.agent_health_levels = np.zeros(self.n_agents, dtype=np.float32)
+        self.enemy_mask = np.ones(self.n_enemies, dtype=np.float32)
+        self.ally_start_positions: np.ndarray | None = None
+        self.enemy_start_positions: np.ndarray | None = None
+        self.ally_team: Sequence[Any] | None = None
+        self.enemy_team: Sequence[Any] | None = None
         self.fov_directions = np.zeros((self.n_agents, 2), dtype=np.float32)
         self.fov_directions[:, 0] = 1.0
         if self._n_fov_actions > 0:
@@ -261,6 +269,7 @@ class SMACEnv:
         del kwargs
         if episode_config and isinstance(episode_config, Mapping):
             self.capability_config.update(dict(episode_config))
+        self._apply_episode_capabilities(episode_config)
 
         self._episode_steps = 0
         self.reward = 0.0
@@ -524,6 +533,54 @@ class SMACEnv:
             total += 1
         return int(total)
 
+    def _apply_episode_capabilities(
+        self,
+        episode_config: Mapping[str, Any] | None,
+    ) -> None:
+        payload: dict[str, Any] = {}
+        if isinstance(self.capability_config, Mapping):
+            payload.update(dict(self.capability_config))
+        if isinstance(episode_config, Mapping):
+            payload.update(dict(episode_config))
+
+        self.agent_attack_probabilities = _extract_capability_vector(
+            payload=payload.get('attack'),
+            size=self.n_agents,
+            default=1.0,
+        )
+        self.agent_health_levels = _extract_capability_vector(
+            payload=payload.get('health'),
+            size=self.n_agents,
+            default=0.0,
+        )
+        self.enemy_mask = _extract_capability_vector(
+            payload=payload.get('enemy_mask'),
+            size=self.n_enemies,
+            default=1.0,
+        )
+
+        start_positions = payload.get('start_positions', {})
+        if isinstance(start_positions, Mapping):
+            self.ally_start_positions = _extract_positions(
+                start_positions.get('ally_start_positions'),
+            )
+            self.enemy_start_positions = _extract_positions(
+                start_positions.get('enemy_start_positions'),
+            )
+        else:
+            self.ally_start_positions = None
+            self.enemy_start_positions = None
+
+        team_payload = payload.get('team_gen', {})
+        if isinstance(team_payload, Mapping):
+            ally_team = team_payload.get('ally_team')
+            enemy_team = team_payload.get('enemy_team')
+            self.ally_team = list(ally_team) if ally_team is not None else None
+            self.enemy_team = list(enemy_team) if enemy_team is not None else None
+        else:
+            self.ally_team = None
+            self.enemy_team = None
+
     def _sync_map_geometry(self) -> None:
         env = self._session.env
         if env is None:
@@ -609,6 +666,29 @@ class SMACEnv:
             enemies,
             key=attrgetter('unit_type', 'pos.x', 'pos.y'),
         )
+
+        if self.agent_health_levels.size > 0:
+            filtered_allies = []
+            for idx, unit in enumerate(allies_sorted):
+                if idx >= self.agent_health_levels.size:
+                    filtered_allies.append(unit)
+                    continue
+                health_max = float(getattr(unit, 'health_max', 0.0) or 0.0)
+                if health_max <= 0.0:
+                    filtered_allies.append(unit)
+                    continue
+                health = float(getattr(unit, 'health', 0.0))
+                if (health / health_max) < float(self.agent_health_levels[idx]):
+                    continue
+                filtered_allies.append(unit)
+            allies_sorted = filtered_allies
+
+        if self.enemy_mask.size > 0:
+            filtered_enemies = []
+            for idx, unit in enumerate(enemies_sorted):
+                if idx >= self.enemy_mask.size or float(self.enemy_mask[idx]) > 0.0:
+                    filtered_enemies.append(unit)
+            enemies_sorted = filtered_enemies
         return allies_sorted, enemies_sorted
 
     def _sync_legacy_unit_views(self) -> None:
@@ -687,6 +767,39 @@ def _decode_pathing_grid(*, map_info: Any, map_x: int, map_y: int) -> np.ndarray
             return np.transpose(unpacked)
         arr = np.array(list(pathing.data), dtype=bool).reshape(map_x, map_y)
         return np.invert(np.flip(np.transpose(arr), axis=1))
+    except Exception:
+        return None
+
+
+def _extract_capability_vector(
+    *,
+    payload: Any,
+    size: int,
+    default: float,
+) -> np.ndarray:
+    if isinstance(payload, Mapping):
+        values = payload.get('item', None)
+    else:
+        values = payload
+    if values is None:
+        return np.full(size, default, dtype=np.float32)
+    arr = np.asarray(values, dtype=np.float32).flatten()
+    if arr.size >= size:
+        return arr[:size].astype(np.float32)
+    padded = np.full(size, default, dtype=np.float32)
+    if arr.size > 0:
+        padded[: arr.size] = arr
+    return padded
+
+
+def _extract_positions(values: Any) -> np.ndarray | None:
+    if values is None:
+        return None
+    try:
+        arr = np.asarray(values, dtype=np.float32)
+        if arr.ndim != 2 or arr.shape[1] != 2:
+            return None
+        return arr
     except Exception:
         return None
 
