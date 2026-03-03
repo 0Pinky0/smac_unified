@@ -20,8 +20,8 @@ from ..handlers import (
 )
 from ..maps import MapParams, get_map_params
 from ..players import OpponentEpisodeContext, OpponentRuntime
-from ..core import UnitTracker
 from .session_sc2env import SC2EnvRawSession, SC2SessionConfig
+from .unit_tracker import UnitTracker
 from .variants import UnitTypeIds, VariantLogic, build_variant_logic
 
 

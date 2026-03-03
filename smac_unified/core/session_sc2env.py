@@ -4,7 +4,7 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, List, Sequence
+from typing import Any, List, Sequence
 
 from s2clientprotocol import sc2api_pb2 as sc_pb
 

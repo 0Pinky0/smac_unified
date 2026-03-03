@@ -42,7 +42,7 @@ from .env_factory import (
     build_default_backend_registry,
     make_env,
 )
-from .native import (
+from .core import (
     NativeStarCraft2Env,
     SC2EnvRawSession,
     SC2SessionConfig,
