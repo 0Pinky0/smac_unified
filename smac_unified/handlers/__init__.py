@@ -1,37 +1,40 @@
-from .base import (
-    ActionBuilder,
-    BuilderContext,
-    BuildContext,
+from .action import ActionBuilder, DefaultNativeActionBuilder, NativeActionBuilder
+from .obs import (
+    DefaultNativeObservationBuilder,
+    DefaultObservationBuilder,
     FrameObservationBuilder,
-    FrameRewardBuilder,
-    FrameStateBuilder,
-    NativeActionBuilder,
     NativeObservationBuilder,
-    NativeRewardBuilder,
-    NativeStateBuilder,
     ObservationBuilder,
+)
+from .reward import (
+    DefaultNativeRewardBuilder,
+    DefaultRewardBuilder,
+    FrameRewardBuilder,
+    NativeRewardBuilder,
     RewardBuilder,
-    RewardContext,
+    builder_bundle,
+)
+from .state import (
+    DefaultNativeStateBuilder,
+    DefaultStateBuilder,
+    FrameStateBuilder,
+    NativeStateBuilder,
     StateBuilder,
+)
+from .types import (
+    BuildContext,
+    BuilderContext,
+    RewardContext,
     TrackedUnit,
     UnitFrame,
+    UnitPosition,
     UnitTeamFrame,
-)
-from .defaults import (
-    DefaultNativeActionBuilder,
-    DefaultNativeObservationBuilder,
-    DefaultNativeRewardBuilder,
-    DefaultNativeStateBuilder,
-    DefaultObservationBuilder,
-    DefaultRewardBuilder,
-    DefaultStateBuilder,
-    builder_bundle,
 )
 
 __all__ = [
     "ActionBuilder",
-    "BuilderContext",
     "BuildContext",
+    "BuilderContext",
     "DefaultNativeActionBuilder",
     "DefaultNativeObservationBuilder",
     "DefaultNativeRewardBuilder",
@@ -52,6 +55,7 @@ __all__ = [
     "StateBuilder",
     "TrackedUnit",
     "UnitFrame",
+    "UnitPosition",
     "UnitTeamFrame",
     "builder_bundle",
 ]

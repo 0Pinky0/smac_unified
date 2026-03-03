@@ -93,7 +93,7 @@ Builder overrides use one shared factory surface:
 
 ```python
 from smac_unified import make_env
-from smac_unified.builders import (
+from smac_unified.handlers import (
     DefaultNativeActionBuilder,
     DefaultNativeObservationBuilder,
     DefaultNativeStateBuilder,

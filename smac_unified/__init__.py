@@ -1,7 +1,7 @@
 """Standalone unified entry points for SMAC-family environments."""
 
 from .adapters import NormalizedEnvAdapter
-from .builders import (
+from .handlers import (
     ActionBuilder,
     BuilderContext,
     BuildContext,

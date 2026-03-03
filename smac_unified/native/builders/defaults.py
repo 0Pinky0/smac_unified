@@ -1,4 +1,4 @@
-from ...builders import (
+from ...handlers import (
     DefaultNativeActionBuilder,
     DefaultNativeObservationBuilder,
     DefaultNativeRewardBuilder,

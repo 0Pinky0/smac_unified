@@ -4,7 +4,7 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from .builders import (
+from .handlers import (
     BuildContext,
     DefaultObservationBuilder,
     DefaultRewardBuilder,

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from smac_unified.builders import (
+from smac_unified.handlers import (
     BuilderContext,
     DefaultNativeActionBuilder,
     DefaultNativeObservationBuilder,

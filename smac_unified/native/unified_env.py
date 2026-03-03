@@ -6,7 +6,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 import numpy as np
 
 from ..config import VariantSwitches, merge_switches
-from ..builders import (
+from ..handlers import (
     BuilderContext,
     DefaultNativeActionBuilder,
     DefaultNativeObservationBuilder,
