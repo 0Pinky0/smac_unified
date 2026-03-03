@@ -121,6 +121,7 @@ class NativeStarCraft2Env:
 
         self._session = self._build_session()
         self._opponent_runtime: OpponentRuntime | None = None
+        self._runtime_lifecycle_owner = "env"
 
         self._episode_steps = 0
         self._total_steps = 0
@@ -178,6 +179,9 @@ class NativeStarCraft2Env:
         self._opponent_runtime = runtime
         runtime.bind_env(self, self.variant)
 
+    def set_runtime_lifecycle_owner(self, owner: str) -> None:
+        self._runtime_lifecycle_owner = owner
+
     def seed(self, seed: int | None = None):
         self._seed = seed
         if self._session is not None:
@@ -218,7 +222,10 @@ class NativeStarCraft2Env:
             context=self._builder_context,
         )
 
-        if self._opponent_runtime is not None:
+        if (
+            self._opponent_runtime is not None
+            and self._runtime_lifecycle_owner == "env"
+        ):
             self._opponent_runtime.on_reset(
                 OpponentEpisodeContext(
                     family=self.variant,
@@ -310,6 +317,11 @@ class NativeStarCraft2Env:
         return float(reward), bool(terminated), info
 
     def close(self) -> None:
+        if (
+            self._opponent_runtime is not None
+            and self._runtime_lifecycle_owner == "env"
+        ):
+            self._opponent_runtime.close()
         self._session.close()
 
     def get_episode_step(self) -> int:

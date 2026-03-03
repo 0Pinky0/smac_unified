@@ -49,6 +49,8 @@ class NormalizedEnvAdapter:
         self._opponent_runtime.bind_env(self._env, self.family)
         if hasattr(self._env, "set_opponent_runtime"):
             self._env.set_opponent_runtime(self._opponent_runtime)
+        if hasattr(self._env, "set_runtime_lifecycle_owner"):
+            self._env.set_runtime_lifecycle_owner("adapter")
 
     def reset(
         self,
