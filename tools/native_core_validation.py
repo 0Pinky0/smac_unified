@@ -28,6 +28,7 @@ DEFAULT_MAPS = {
 
 @dataclass
 class CaseResult:
+    profile: str
     family: str
     map_name: str
     backend_mode: str
@@ -48,6 +49,7 @@ class CaseResult:
 
 def _run_case(
     *,
+    profile: str,
     family: str,
     map_name: str,
     backend_mode: str,
@@ -82,7 +84,6 @@ env = make_env(
     backend_mode=backend_mode,
     normalized_api=False,
 )
-t_make = time.perf_counter()
 env.reset()
 t_reset = time.perf_counter()
 step_elapsed = 0.0
@@ -152,6 +153,7 @@ print(json.dumps({
     if proc.returncode != 0:
         error = proc.stderr.strip() or proc.stdout.strip() or 'unknown failure'
         return CaseResult(
+            profile=profile,
             family=family,
             map_name=map_name,
             backend_mode=backend_mode,
@@ -172,6 +174,7 @@ print(json.dumps({
     elapsed = float(payload.get('elapsed_s', elapsed_total))
     cold_sps = float(payload.get('sps', steps / max(elapsed, 1e-9)))
     return CaseResult(
+        profile=profile,
         family=family,
         map_name=map_name,
         backend_mode=backend_mode,
@@ -217,6 +220,14 @@ def _summarize(results: List[CaseResult]) -> Dict[str, Dict[str, float]]:
     return summary
 
 
+def _summarize_by_profile(results: List[CaseResult]) -> Dict[str, Dict[str, Dict[str, float]]]:
+    summary_by_profile: Dict[str, Dict[str, Dict[str, float]]] = {}
+    for profile in sorted({row.profile for row in results}):
+        profile_rows = [row for row in results if row.profile == profile]
+        summary_by_profile[profile] = _summarize(profile_rows)
+    return summary_by_profile
+
+
 def main() -> int:
     _ensure_project_on_path()
     from smac_unified import make_env
@@ -239,34 +250,76 @@ def main() -> int:
         default=1,
         help='Exclude first N steps from steady-state SPS.',
     )
+    parser.add_argument(
+        '--profile',
+        choices=['quick', 'steady', 'both'],
+        default='quick',
+        help='Benchmark profile: quick (default), steady, or both.',
+    )
+    parser.add_argument(
+        '--steady-steps',
+        type=int,
+        default=200,
+        help='Step count for steady profile.',
+    )
+    parser.add_argument(
+        '--steady-warmup-steps',
+        type=int,
+        default=20,
+        help='Warmup step count for steady profile.',
+    )
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
 
-    results: List[CaseResult] = []
-    for family in args.families:
-        map_name = DEFAULT_MAPS[family]
-        for backend_mode in ('native', 'bridge'):
-            row = _run_case(
-                family=family,
-                map_name=map_name,
-                backend_mode=backend_mode,
-                steps=args.steps,
-                warmup_steps=args.warmup_steps,
-                make_env_fn=make_env,
-            )
-            results.append(row)
-            status = 'PASS' if row.ok else 'FAIL'
-            print(
-                f'[{status}] family={family} mode={backend_mode} map={map_name} '
-                f'cold_sps={row.sps:.3f} steady_sps={row.steady_sps:.3f} '
-                f'elapsed={row.elapsed_s:.3f}s startup={row.startup_s:.3f}s '
-                f'step={row.step_elapsed_s:.3f}s error={row.error}'
-            )
+    if args.profile == 'quick':
+        run_profiles = [('quick', args.steps, args.warmup_steps)]
+    elif args.profile == 'steady':
+        run_profiles = [('steady', args.steady_steps, args.steady_warmup_steps)]
+    else:
+        run_profiles = [
+            ('quick', args.steps, args.warmup_steps),
+            ('steady', args.steady_steps, args.steady_warmup_steps),
+        ]
 
-    summary = _summarize(results)
+    results: List[CaseResult] = []
+    for profile_name, steps, warmup_steps in run_profiles:
+        for family in args.families:
+            map_name = DEFAULT_MAPS[family]
+            for backend_mode in ('native', 'bridge'):
+                row = _run_case(
+                    profile=profile_name,
+                    family=family,
+                    map_name=map_name,
+                    backend_mode=backend_mode,
+                    steps=steps,
+                    warmup_steps=warmup_steps,
+                    make_env_fn=make_env,
+                )
+                results.append(row)
+                status = 'PASS' if row.ok else 'FAIL'
+                print(
+                    f'[{status}] profile={profile_name} family={family} '
+                    f'mode={backend_mode} map={map_name} cold_sps={row.sps:.3f} '
+                    f'steady_sps={row.steady_sps:.3f} elapsed={row.elapsed_s:.3f}s '
+                    f'startup={row.startup_s:.3f}s step={row.step_elapsed_s:.3f}s '
+                    f'error={row.error}'
+                )
+
+    summary_by_profile = _summarize_by_profile(results)
+    primary_profile = run_profiles[0][0]
     output = {
+        'requested_profile': args.profile,
+        'profiles': [
+            {
+                'name': profile_name,
+                'steps': steps,
+                'warmup_steps': warmup_steps,
+            }
+            for profile_name, steps, warmup_steps in run_profiles
+        ],
         'results': [asdict(row) for row in results],
-        'summary': summary,
+        'summary': summary_by_profile.get(primary_profile, {}),
+        'summary_by_profile': summary_by_profile,
     }
     output_path = Path(args.output_json)
     output_path.parent.mkdir(parents=True, exist_ok=True)
