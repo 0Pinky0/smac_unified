@@ -85,6 +85,32 @@ class SMACEnv:
         self.state_last_action = bool(
             self._env_kwargs.get('state_last_action', True)
         )
+        self.state_timestep_number = bool(
+            self._env_kwargs.get('state_timestep_number', False)
+        )
+        self.obs_all_health = bool(self._env_kwargs.get('obs_all_health', True))
+        self.obs_own_health = bool(self._env_kwargs.get('obs_own_health', True))
+        if self.obs_all_health:
+            self.obs_own_health = True
+        self.obs_last_action = bool(self._env_kwargs.get('obs_last_action', False))
+        self.obs_pathing_grid = bool(
+            self._env_kwargs.get('obs_pathing_grid', False)
+        )
+        self.obs_terrain_height = bool(
+            self._env_kwargs.get('obs_terrain_height', False)
+        )
+        self.obs_timestep_number = bool(
+            self._env_kwargs.get('obs_timestep_number', False)
+        )
+        self.obs_instead_of_state = bool(
+            self._env_kwargs.get('obs_instead_of_state', False)
+        )
+        self.continuing_episode = bool(
+            self._env_kwargs.get('continuing_episode', False)
+        )
+        self.shield_bits_ally = 1 if self.map_params.a_race == 'P' else 0
+        self.shield_bits_enemy = 1 if self.map_params.b_race == 'P' else 0
+        self.unit_type_bits = int(self.map_params.unit_type_bits)
         self._seed = self._env_kwargs.get('seed')
         default_handlers = build_default_handler_bundle(
             switches=self.switches,
@@ -135,12 +161,7 @@ class SMACEnv:
                 n_enemies=self.n_enemies,
             )
             self.n_actions_no_attack = 6
-        self._obs_vector_size = (
-            4
-            + self._attack_slots * 6
-            + max(self.n_agents - 1, 1) * 6
-            + 4
-        )
+        self._obs_vector_size = self._estimate_obs_vector_size()
 
         self._session = self._build_session()
         self._opponent_runtime: OpponentRuntime | None = None
@@ -402,6 +423,8 @@ class SMACEnv:
         return int(self.get_state().shape[0])
 
     def get_obs_size(self):
+        if self._unit_frame is not None and self._handler_context is not None and self.n_agents > 0:
+            return int(self.get_obs_agent(0).shape[0])
         return int(self._obs_vector_size)
 
     def get_avail_actions(self):
@@ -440,6 +463,43 @@ class SMACEnv:
             ),
             'native_backend': True,
         }
+
+    def _estimate_obs_vector_size(self) -> int:
+        move_feats = 4
+        if self.obs_pathing_grid:
+            move_feats += 8
+        if self.obs_terrain_height:
+            move_feats += 9
+
+        enemy_feats = 4
+        if self.obs_all_health:
+            enemy_feats += 1 + self.shield_bits_enemy
+        if self.unit_type_bits > 0:
+            enemy_feats += self.unit_type_bits
+
+        ally_feats = 4
+        if self.obs_all_health:
+            ally_feats += 1 + self.shield_bits_ally
+        if self.unit_type_bits > 0:
+            ally_feats += self.unit_type_bits
+        if self.obs_last_action:
+            ally_feats += self.n_actions
+
+        own_feats = 0
+        if self.obs_own_health:
+            own_feats += 1 + self.shield_bits_ally
+        if self.unit_type_bits > 0:
+            own_feats += self.unit_type_bits
+
+        total = (
+            move_feats
+            + self._attack_slots * enemy_feats
+            + max(self.n_agents - 1, 1) * ally_feats
+            + own_feats
+        )
+        if self.obs_timestep_number:
+            total += 1
+        return int(total)
 
     def _sync_map_geometry(self) -> None:
         env = self._session.env
@@ -502,6 +562,17 @@ class SMACEnv:
             action_mask=self._action_mask,
             ability_padding=self._ability_padding,
             use_ability=self._use_ability,
+            obs_all_health=self.obs_all_health,
+            obs_own_health=self.obs_own_health,
+            obs_last_action=self.obs_last_action,
+            obs_pathing_grid=self.obs_pathing_grid,
+            obs_terrain_height=self.obs_terrain_height,
+            obs_timestep_number=self.obs_timestep_number,
+            state_timestep_number=self.state_timestep_number,
+            obs_instead_of_state=self.obs_instead_of_state,
+            shield_bits_ally=self.shield_bits_ally,
+            shield_bits_enemy=self.shield_bits_enemy,
+            unit_type_bits=self.unit_type_bits,
         )
 
     def _split_raw_units(self) -> tuple[list[Any], list[Any]]:

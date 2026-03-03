@@ -90,3 +90,14 @@ class HandlerContext:
     action_mask: bool = True
     ability_padding: int = 0
     use_ability: bool = False
+    obs_all_health: bool = True
+    obs_own_health: bool = True
+    obs_last_action: bool = False
+    obs_pathing_grid: bool = False
+    obs_terrain_height: bool = False
+    obs_timestep_number: bool = False
+    state_timestep_number: bool = False
+    obs_instead_of_state: bool = False
+    shield_bits_ally: int = 0
+    shield_bits_enemy: int = 0
+    unit_type_bits: int = 0

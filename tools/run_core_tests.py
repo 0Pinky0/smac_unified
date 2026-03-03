@@ -59,6 +59,14 @@ TEST_FUNCTIONS = [
         'tests.test_action_parity',
         'test_ability_handler_enables_ability_branch_and_builds_command',
     ),
+    (
+        'tests.test_obs_state_parity',
+        'test_observation_handler_restores_structured_feature_toggles',
+    ),
+    (
+        'tests.test_obs_state_parity',
+        'test_capability_handlers_append_capability_channels',
+    ),
 ]
 
 

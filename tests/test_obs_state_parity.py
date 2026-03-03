@@ -1,0 +1,201 @@
+from __future__ import annotations
+
+from types import SimpleNamespace
+
+import numpy as np
+
+from smac_unified.handlers import (
+    CapabilityObservationHandler,
+    CapabilityStateHandler,
+    DefaultObservationHandler,
+    DefaultStateHandler,
+    HandlerContext,
+    TrackedUnit,
+    UnitFrame,
+    UnitTeamFrame,
+)
+
+
+class _VariantLogic:
+    def shoot_range_by_type(self, unit_ids):
+        return {
+            getattr(unit_ids, 'marine_id', 0): 6.0,
+            getattr(unit_ids, 'medivac_id', 0): 4.0,
+            1: 6.0,
+            2: 6.0,
+        }
+
+
+class _AvailEnv:
+    def __init__(self, masks: dict[int, list[int]]):
+        self._masks = masks
+        self.episode_limit = 120
+        self.map_params = SimpleNamespace(map_type='MMM')
+        self.agent_attack_probabilities = np.asarray([0.9, 0.8], dtype=np.float32)
+        self.agent_health_levels = np.asarray([0.7, 0.6], dtype=np.float32)
+
+    def get_avail_agent_actions(self, agent_id: int) -> list[int]:
+        return list(self._masks[agent_id])
+
+    def get_obs(self):
+        return []
+
+
+def _tracked(
+    *,
+    unit_id: int,
+    tag: int,
+    unit_type: int,
+    x: float,
+    y: float,
+    health: float,
+    health_max: float = 45.0,
+    shield: float = 0.0,
+    shield_max: float = 0.0,
+    alive: bool = True,
+):
+    return TrackedUnit(
+        unit_id=unit_id,
+        tag=tag,
+        unit_type=unit_type,
+        x=x,
+        y=y,
+        health=health,
+        health_max=health_max,
+        shield=shield,
+        shield_max=shield_max,
+        weapon_cooldown=0.0,
+        alive=alive,
+        owner=1,
+        raw=None,
+    )
+
+
+def _team(units):
+    return UnitTeamFrame(
+        units=tuple(units),
+        health=np.asarray([u.health for u in units], dtype=np.float32),
+        shield=np.asarray([u.shield for u in units], dtype=np.float32),
+        alive=np.asarray([u.alive for u in units], dtype=bool),
+        tags=np.asarray([u.tag for u in units], dtype=np.int64),
+    )
+
+
+def _context(*, env):
+    return HandlerContext(
+        family='smac',
+        map_name='MMM',
+        episode_step=10,
+        n_agents=2,
+        n_enemies=1,
+        n_actions=12,
+        n_actions_no_attack=10,
+        attack_slots=2,
+        move_amount=2.0,
+        map_x=32.0,
+        map_y=32.0,
+        max_distance_x=32.0,
+        max_distance_y=32.0,
+        state_last_action=True,
+        last_action=np.ones((2, 12), dtype=np.float32),
+        reward_sparse=False,
+        reward_only_positive=False,
+        reward_death_value=10.0,
+        reward_negative_scale=0.5,
+        reward_scale=False,
+        reward_scale_rate=20.0,
+        max_reward=0.0,
+        variant_logic=_VariantLogic(),
+        unit_type_ids=SimpleNamespace(marine_id=1, marauder_id=2, medivac_id=3),
+        switches=SimpleNamespace(opponent_mode='sc2_computer'),
+        env=env,
+        obs_all_health=True,
+        obs_own_health=True,
+        obs_last_action=True,
+        obs_pathing_grid=True,
+        obs_terrain_height=True,
+        obs_timestep_number=True,
+        state_timestep_number=True,
+        obs_instead_of_state=False,
+        shield_bits_ally=1,
+        shield_bits_enemy=0,
+        unit_type_bits=3,
+        n_fov_actions=4,
+        conic_fov_angle=float(np.pi / 2.0),
+        fov_directions=np.asarray([[1.0, 0.0], [0.0, 1.0]], dtype=np.float32),
+        canonical_fov_directions=np.asarray(
+            [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]],
+            dtype=np.float32,
+        ),
+        action_mask=True,
+        pathing_grid=np.ones((32, 32), dtype=bool),
+        terrain_height=np.zeros((32, 32), dtype=np.float32),
+    )
+
+
+def test_observation_handler_restores_structured_feature_toggles():
+    env = _AvailEnv(
+        masks={
+            0: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+            1: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        }
+    )
+    context = _context(env=env)
+    frame = UnitFrame(
+        allies=_team(
+            [
+                _tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=40, shield=5, shield_max=5),
+                _tracked(unit_id=1, tag=2, unit_type=1, x=6, y=4, health=45, shield=0, shield_max=0),
+            ]
+        ),
+        enemies=_team([_tracked(unit_id=0, tag=101, unit_type=1, x=8, y=4, health=35)]),
+        prev_allies_health=np.asarray([40.0, 45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([5.0, 0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([35.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=2,
+    )
+
+    handler = DefaultObservationHandler()
+    obs = handler.build_agent_obs(frame=frame, context=context, agent_id=0)
+
+    move_dim = 4 + 8 + 9
+    enemy_dim = 5 + 1 + 3
+    ally_dim = 4 + 1 + 1 + 3 + context.n_actions
+    own_dim = 1 + 1 + 3
+    expected = move_dim + context.attack_slots * enemy_dim + (context.n_agents - 1) * ally_dim + own_dim + 1
+    assert obs.shape[0] == expected
+    assert np.isclose(obs[-1], context.episode_step / env.episode_limit)
+
+
+def test_capability_handlers_append_capability_channels():
+    env = _AvailEnv(
+        masks={
+            0: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+            1: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        }
+    )
+    context = _context(env=env)
+    frame = UnitFrame(
+        allies=_team(
+            [
+                _tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=40, shield=5, shield_max=5),
+                _tracked(unit_id=1, tag=2, unit_type=1, x=6, y=4, health=45),
+            ]
+        ),
+        enemies=_team([_tracked(unit_id=0, tag=101, unit_type=1, x=8, y=4, health=35)]),
+        prev_allies_health=np.asarray([40.0, 45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([5.0, 0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([35.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=3,
+    )
+
+    base_obs = DefaultObservationHandler().build_agent_obs(frame=frame, context=context, agent_id=0)
+    cap_obs = CapabilityObservationHandler().build_agent_obs(frame=frame, context=context, agent_id=0)
+    assert cap_obs.shape[0] == base_obs.shape[0] + 4  # fov(2) + attack_prob + health_level
+
+    base_state = DefaultStateHandler().build_state(frame=frame, context=context)
+    cap_state = CapabilityStateHandler().build_state(frame=frame, context=context)
+    assert cap_state.shape[0] == base_state.shape[0] + 4
+
