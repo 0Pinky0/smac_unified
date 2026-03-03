@@ -21,7 +21,7 @@ class UnitTypeIds:
 
 
 class VariantLogic:
-    variant = "smac"
+    variant = 'smac'
 
     def __init__(self, switches: VariantSwitches, map_params: MapParams):
         self.switches = switches
@@ -32,35 +32,35 @@ class VariantLogic:
         return 6 + attack_slots
 
     def reward_positive_transform(self, value: float) -> float:
-        if self.switches.reward_positive_mode == "clamp_zero":
+        if self.switches.reward_positive_mode == 'clamp_zero':
             return max(value, 0.0)
         return abs(value)
 
     def infer_unit_type_ids(self, min_unit_type: int) -> UnitTypeIds:
         ids = UnitTypeIds()
         map_type = self.map_params.map_type
-        if map_type == "marines":
+        if map_type == 'marines':
             ids.marine_id = min_unit_type
-        elif map_type == "stalkers_and_zealots":
+        elif map_type == 'stalkers_and_zealots':
             ids.stalker_id = min_unit_type
             ids.zealot_id = min_unit_type + 1
-        elif map_type == "colossi_stalkers_zealots":
+        elif map_type == 'colossi_stalkers_zealots':
             ids.colossus_id = min_unit_type
             ids.stalker_id = min_unit_type + 1
             ids.zealot_id = min_unit_type + 2
-        elif map_type == "MMM":
+        elif map_type == 'MMM':
             ids.marauder_id = min_unit_type
             ids.marine_id = min_unit_type + 1
             ids.medivac_id = min_unit_type + 2
-        elif map_type == "zealots":
+        elif map_type == 'zealots':
             ids.zealot_id = min_unit_type
-        elif map_type == "hydralisks":
+        elif map_type == 'hydralisks':
             ids.hydralisk_id = min_unit_type
-        elif map_type == "stalkers":
+        elif map_type == 'stalkers':
             ids.stalker_id = min_unit_type
-        elif map_type == "colossus":
+        elif map_type == 'colossus':
             ids.colossus_id = min_unit_type
-        elif map_type == "bane":
+        elif map_type == 'bane':
             ids.baneling_id = min_unit_type
             ids.zergling_id = min_unit_type + 1
         return ids
@@ -80,8 +80,8 @@ class VariantLogic:
 
     @property
     def scripted_opponent_enabled(self) -> bool:
-        return self.switches.opponent_mode == "scripted_pool"
+        return self.switches.opponent_mode == 'scripted_pool'
 
     @property
     def ability_mode_enabled(self) -> bool:
-        return self.switches.action_mode == "ability_augmented"
+        return self.switches.action_mode == 'ability_augmented'

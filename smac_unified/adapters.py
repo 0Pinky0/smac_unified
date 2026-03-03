@@ -29,10 +29,10 @@ class NormalizedEnvAdapter:
         self._opponent_config = dict(opponent_config or {})
         self._opponent_runtime = opponent_runtime or EngineBotOpponentRuntime()
         self._opponent_runtime.bind_env(self._env, self.family)
-        if hasattr(self._env, "set_opponent_runtime"):
+        if hasattr(self._env, 'set_opponent_runtime'):
             self._env.set_opponent_runtime(self._opponent_runtime)
-        if hasattr(self._env, "set_runtime_lifecycle_owner"):
-            self._env.set_runtime_lifecycle_owner("adapter")
+        if hasattr(self._env, 'set_runtime_lifecycle_owner'):
+            self._env.set_runtime_lifecycle_owner('adapter')
 
     def reset(
         self,
@@ -41,22 +41,22 @@ class NormalizedEnvAdapter:
         options: dict | None = None,
     ) -> StepBatch:
         if seed is not None:
-            if hasattr(self._env, "seed") and callable(self._env.seed):
+            if hasattr(self._env, 'seed') and callable(self._env.seed):
                 try:
                     self._env.seed(seed)
                 except Exception:
-                    if hasattr(self._env, "_seed"):
+                    if hasattr(self._env, '_seed'):
                         self._env._seed = seed
-            elif hasattr(self._env, "_seed"):
+            elif hasattr(self._env, '_seed'):
                 self._env._seed = seed
 
         reset_kwargs = dict(options or {})
         try:
             reset_result = self._env.reset(**reset_kwargs)
         except TypeError:
-            if "episode_config" in reset_kwargs:
+            if 'episode_config' in reset_kwargs:
                 reset_result = self._env.reset(
-                    episode_config=reset_kwargs["episode_config"]
+                    episode_config=reset_kwargs['episode_config']
                 )
             else:
                 reset_result = self._env.reset()
@@ -69,7 +69,7 @@ class NormalizedEnvAdapter:
 
         episode_context = OpponentEpisodeContext(
             family=self.family,
-            map_name=str(getattr(self._env, "map_name", "")),
+            map_name=str(getattr(self._env, 'map_name', '')),
             seed=seed,
             episode_config=self._opponent_config,
         )
@@ -154,9 +154,9 @@ class NormalizedEnvAdapter:
         )
 
     def _episode_step(self) -> int:
-        if hasattr(self._env, "get_episode_step"):
+        if hasattr(self._env, 'get_episode_step'):
             return int(self._env.get_episode_step())
-        return int(getattr(self._env, "_episode_steps", 0))
+        return int(getattr(self._env, '_episode_steps', 0))
 
     def __getattr__(self, name: str):
         return getattr(self._env, name)

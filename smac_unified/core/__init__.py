@@ -13,15 +13,15 @@ from .variants import (
 )
 
 __all__ = [
-    "NativeStarCraft2Env",
-    "SC2EnvRawSession",
-    "SC2SessionConfig",
-    "SmacHardVariantLogic",
-    "SmacV2VariantLogic",
-    "SmacVariantLogic",
-    "UnitTypeIds",
-    "UnitTracker",
-    "UnitValueSnapshot",
-    "VariantLogic",
-    "build_variant_logic",
+    'NativeStarCraft2Env',
+    'SC2EnvRawSession',
+    'SC2SessionConfig',
+    'SmacHardVariantLogic',
+    'SmacV2VariantLogic',
+    'SmacVariantLogic',
+    'UnitTypeIds',
+    'UnitTracker',
+    'UnitValueSnapshot',
+    'VariantLogic',
+    'build_variant_logic',
 ]

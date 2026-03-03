@@ -37,7 +37,7 @@ class StepBatch:
         terminated: bool = False,
         info: Dict[str, Any] | None = None,
         episode_step: int = 0,
-    ) -> "StepBatch":
+    ) -> 'StepBatch':
         return cls(
             obs=_as_float_array(obs),
             state=_as_float_array(state),
@@ -59,7 +59,7 @@ class StepBatch:
         terminated: bool = False,
         info: Dict[str, Any] | None = None,
         episode_step: int = 0,
-    ) -> "StepBatch":
+    ) -> 'StepBatch':
         # Backward-compatible alias while adopting explicit components API.
         return cls.from_components(
             obs=obs,

@@ -26,30 +26,30 @@ class BackendRegistry:
         self,
         family: str,
         *,
-        mode: str = "auto",
+        mode: str = 'auto',
         config: BackendConfig | None = None,
     ) -> EnvBackend:
         candidates = list(self._backends.get(family, []))
         if not candidates:
             raise ValueError(
-                f"Unsupported family={family!r}; "
-                f"registered={sorted(self._backends.keys())}"
+                f'Unsupported family={family!r}; '
+                f'registered={sorted(self._backends.keys())}'
             )
 
-        if mode not in {"native", "bridge", "auto"}:
+        if mode not in {'native', 'bridge', 'auto'}:
             raise ValueError(
-                f"Unsupported backend mode={mode!r}, expected native|bridge|auto"
+                f'Unsupported backend mode={mode!r}, expected native|bridge|auto'
             )
 
         cfg = config or BackendConfig(family=family)
         ordered: List[EnvBackend]
-        if mode == "native":
-            ordered = [b for b in candidates if b.kind == "native"]
-        elif mode == "bridge":
-            ordered = [b for b in candidates if b.kind == "bridge"]
+        if mode == 'native':
+            ordered = [b for b in candidates if b.kind == 'native']
+        elif mode == 'bridge':
+            ordered = [b for b in candidates if b.kind == 'bridge']
         else:
-            native = [b for b in candidates if b.kind == "native"]
-            bridge = [b for b in candidates if b.kind == "bridge"]
+            native = [b for b in candidates if b.kind == 'native']
+            bridge = [b for b in candidates if b.kind == 'bridge']
             ordered = native + bridge
 
         available = [b for b in ordered if b.is_available(cfg)]
@@ -58,9 +58,9 @@ class BackendRegistry:
 
         available_kinds = sorted({b.kind for b in candidates})
         raise RuntimeError(
-            "No backend implementation is available for "
-            f"family={family!r}, mode={mode!r}. "
-            f"Registered kinds={available_kinds}."
+            'No backend implementation is available for '
+            f'family={family!r}, mode={mode!r}. '
+            f'Registered kinds={available_kinds}.'
         )
 
     def has(self, family: str) -> bool:

@@ -35,9 +35,9 @@ class UnitTracker:
         shield = np.zeros(self.n_units, dtype=np.float32)
         alive = np.zeros(self.n_units, dtype=bool)
         for unit_id, unit in units.items():
-            health[unit_id] = getattr(unit, "health", 0.0)
-            shield[unit_id] = getattr(unit, "shield", 0.0)
-            alive[unit_id] = getattr(unit, "health", 0.0) > 0
+            health[unit_id] = getattr(unit, 'health', 0.0)
+            shield[unit_id] = getattr(unit, 'shield', 0.0)
+            alive[unit_id] = getattr(unit, 'health', 0.0) > 0
         return UnitValueSnapshot(health=health, shield=shield, alive=alive)
 
     @staticmethod
@@ -137,7 +137,7 @@ class UnitTracker:
 
     @staticmethod
     def _sorted_units(units: Sequence[object]) -> list[object]:
-        return sorted(units, key=attrgetter("unit_type", "pos.x", "pos.y"))
+        return sorted(units, key=attrgetter('unit_type', 'pos.x', 'pos.y'))
 
     def _seed_team_units(
         self,
@@ -230,16 +230,16 @@ class UnitTracker:
             )
         return TrackedUnit(
             unit_id=unit_id,
-            tag=int(getattr(raw_unit, "tag", fallback_tag)),
-            unit_type=int(getattr(raw_unit, "unit_type", fallback_unit_type)),
-            x=float(getattr(getattr(raw_unit, "pos", None), "x", 0.0)),
-            y=float(getattr(getattr(raw_unit, "pos", None), "y", 0.0)),
-            health=float(getattr(raw_unit, "health", 0.0)),
-            health_max=float(getattr(raw_unit, "health_max", 1.0) or 1.0),
-            shield=float(getattr(raw_unit, "shield", 0.0)),
-            shield_max=float(getattr(raw_unit, "shield_max", 1.0) or 1.0),
-            weapon_cooldown=float(getattr(raw_unit, "weapon_cooldown", 0.0)),
-            alive=float(getattr(raw_unit, "health", 0.0)) > 0,
+            tag=int(getattr(raw_unit, 'tag', fallback_tag)),
+            unit_type=int(getattr(raw_unit, 'unit_type', fallback_unit_type)),
+            x=float(getattr(getattr(raw_unit, 'pos', None), 'x', 0.0)),
+            y=float(getattr(getattr(raw_unit, 'pos', None), 'y', 0.0)),
+            health=float(getattr(raw_unit, 'health', 0.0)),
+            health_max=float(getattr(raw_unit, 'health_max', 1.0) or 1.0),
+            shield=float(getattr(raw_unit, 'shield', 0.0)),
+            shield_max=float(getattr(raw_unit, 'shield_max', 1.0) or 1.0),
+            weapon_cooldown=float(getattr(raw_unit, 'weapon_cooldown', 0.0)),
+            alive=float(getattr(raw_unit, 'health', 0.0)) > 0,
             owner=owner,
             raw=raw_unit,
         )

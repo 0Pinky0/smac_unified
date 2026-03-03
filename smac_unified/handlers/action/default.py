@@ -13,10 +13,10 @@ from ..types import HandlerContext, TrackedUnit, UnitFrame
 from .base import ActionHandler
 
 _ACTIONS = {
-    "move": 16,
-    "attack": 23,
-    "stop": 4,
-    "heal": 386,
+    'move': 16,
+    'attack': 23,
+    'stop': 4,
+    'heal': 386,
 }
 
 
@@ -112,7 +112,7 @@ class DefaultActionHandler(ActionHandler):
             return None
         if action == 1:
             cmd = r_pb.ActionRawUnitCommand(
-                ability_id=_ACTIONS["stop"],
+                ability_id=_ACTIONS['stop'],
                 unit_tags=[tag],
                 queue_command=False,
             )
@@ -131,9 +131,9 @@ class DefaultActionHandler(ActionHandler):
                 return None
             target = targets[slot]
             ability_id = (
-                _ACTIONS["heal"]
+                _ACTIONS['heal']
                 if self._is_healer(unit=unit, context=context)
-                else _ACTIONS["attack"]
+                else _ACTIONS['attack']
             )
             cmd = r_pb.ActionRawUnitCommand(
                 ability_id=ability_id,
@@ -153,16 +153,16 @@ class DefaultActionHandler(ActionHandler):
     ) -> Sequence[Any]:
         if (
             runtime is None
-            or getattr(context.switches, "opponent_mode", "") != "scripted_pool"
+            or getattr(context.switches, 'opponent_mode', '') != 'scripted_pool'
         ):
             return []
 
         payload = {
-            "agents": _raw_unit_dict(frame.enemies.units),
-            "enemies": _raw_unit_dict(frame.allies.units),
-            "agent_ability": self._query_enemy_abilities(context.env),
-            "visible_matrix": self._fog_visibility_matrix(frame),
-            "episode_step": context.episode_step,
+            'agents': _raw_unit_dict(frame.enemies.units),
+            'enemies': _raw_unit_dict(frame.allies.units),
+            'agent_ability': self._query_enemy_abilities(context.env),
+            'visible_matrix': self._fog_visibility_matrix(frame),
+            'episode_step': context.episode_step,
         }
         runtime_ctx = OpponentStepContext(
             family=context.family,
@@ -172,7 +172,7 @@ class DefaultActionHandler(ActionHandler):
             info={},
             payload=payload,
         )
-        if hasattr(runtime, "compute_actions"):
+        if hasattr(runtime, 'compute_actions'):
             try:
                 return runtime.compute_actions(runtime_ctx)
             except Exception:
@@ -182,7 +182,7 @@ class DefaultActionHandler(ActionHandler):
     @staticmethod
     def _build_move_cmd(tag: int, x: float, y: float):
         return r_pb.ActionRawUnitCommand(
-            ability_id=_ACTIONS["move"],
+            ability_id=_ACTIONS['move'],
             target_world_space_pos=sc_common.Point2D(x=x, y=y),
             unit_tags=[tag],
             queue_command=False,
@@ -192,10 +192,10 @@ class DefaultActionHandler(ActionHandler):
     def _query_enemy_abilities(env: Any):
         if env is None:
             return []
-        inner_env = getattr(env, "_session", None)
-        inner_env = getattr(inner_env, "env", None)
+        inner_env = getattr(env, '_session', None)
+        inner_env = getattr(inner_env, 'env', None)
         controllers = (
-            getattr(inner_env, "_controllers", None)
+            getattr(inner_env, '_controllers', None)
             if inner_env is not None
             else None
         )
@@ -203,7 +203,7 @@ class DefaultActionHandler(ActionHandler):
             return []
         try:
             query = q_pb.RequestQuery()
-            enemies = getattr(env, "enemies", {})
+            enemies = getattr(env, 'enemies', {})
             for unit in enemies.values():
                 ability = query.abilities.add()
                 ability.unit_tag = unit.tag
@@ -218,7 +218,7 @@ class DefaultActionHandler(ActionHandler):
     def _fog_visibility_matrix(frame: UnitFrame):
         red_visible = [u.tag for u in frame.enemies.units if u.alive]
         blue_visible = [u.tag for u in frame.allies.units if u.alive]
-        return {"red": red_visible, "blue": blue_visible}
+        return {'red': red_visible, 'blue': blue_visible}
 
     @staticmethod
     def _can_move(
@@ -234,7 +234,7 @@ class DefaultActionHandler(ActionHandler):
 
     @staticmethod
     def _is_healer(unit: TrackedUnit, *, context: HandlerContext) -> bool:
-        medivac_id = getattr(context.unit_type_ids, "medivac_id", 0)
+        medivac_id = getattr(context.unit_type_ids, 'medivac_id', 0)
         return medivac_id > 0 and unit.unit_type == medivac_id
 
     def _attack_targets(
@@ -245,7 +245,7 @@ class DefaultActionHandler(ActionHandler):
         context: HandlerContext,
     ) -> list[TrackedUnit]:
         if self._is_healer(unit, context=context):
-            medivac_id = getattr(context.unit_type_ids, "medivac_id", 0)
+            medivac_id = getattr(context.unit_type_ids, 'medivac_id', 0)
             targets = [
                 ally
                 for ally in frame.allies.units

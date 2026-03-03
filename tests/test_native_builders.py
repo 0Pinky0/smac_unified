@@ -19,8 +19,8 @@ from smac_unified.handlers import (
 class _VariantLogic:
     def shoot_range_by_type(self, unit_ids):
         return {
-            getattr(unit_ids, "marine_id", 0): 6.0,
-            getattr(unit_ids, "medivac_id", 0): 4.0,
+            getattr(unit_ids, 'marine_id', 0): 6.0,
+            getattr(unit_ids, 'medivac_id', 0): 4.0,
             2: 6.0,
             3: 6.0,
         }
@@ -91,8 +91,8 @@ def _context(
     reward_scale_rate: float = 20.0,
 ):
     return HandlerContext(
-        family="smac",
-        map_name="3m",
+        family='smac',
+        map_name='3m',
         episode_step=1,
         n_agents=n_agents,
         n_enemies=n_enemies,
@@ -115,7 +115,7 @@ def _context(
         max_reward=max_reward,
         variant_logic=_VariantLogic(),
         unit_type_ids=SimpleNamespace(medivac_id=99, marine_id=2),
-        switches=SimpleNamespace(opponent_mode="sc2_computer"),
+        switches=SimpleNamespace(opponent_mode='sc2_computer'),
         env=env,
     )
 

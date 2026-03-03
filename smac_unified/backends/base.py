@@ -7,11 +7,11 @@ from typing import Any, Dict, Literal, Optional, Protocol, runtime_checkable
 @dataclass
 class BackendConfig:
     family: str
-    map_name: str = "8m"
+    map_name: str = '8m'
     capability_config: Optional[Dict[str, Any]] = None
     env_kwargs: Dict[str, Any] = field(default_factory=dict)
     source_root: str | None = None
-    backend_mode: Literal["native", "bridge", "auto"] = "auto"
+    backend_mode: Literal['native', 'bridge', 'auto'] = 'auto'
     native_options: Dict[str, Any] = field(default_factory=dict)
     bridge_options: Dict[str, Any] = field(default_factory=dict)
     logic_switches: Any | None = None
@@ -50,7 +50,7 @@ class UnifiedEnv(Protocol):
 
 class EnvBackend(Protocol):
     family: str
-    kind: Literal["native", "bridge"]
+    kind: Literal['native', 'bridge']
     priority: int
 
     def is_available(self, config: BackendConfig) -> bool:

@@ -12,23 +12,23 @@ from ..maps import MapParams, register_maps
 
 
 RACES = {
-    "R": "random",
-    "P": "protoss",
-    "T": "terran",
-    "Z": "zerg",
+    'R': 'random',
+    'P': 'protoss',
+    'T': 'terran',
+    'Z': 'zerg',
 }
 
 DIFFICULTIES = {
-    "1": "very_easy",
-    "2": "easy",
-    "3": "medium",
-    "4": "medium_hard",
-    "5": "hard",
-    "6": "harder",
-    "7": "very_hard",
-    "8": "cheat_vision",
-    "9": "cheat_money",
-    "A": "cheat_insane",
+    '1': 'very_easy',
+    '2': 'easy',
+    '3': 'medium',
+    '4': 'medium_hard',
+    '5': 'hard',
+    '6': 'harder',
+    '7': 'very_hard',
+    '8': 'cheat_vision',
+    '9': 'cheat_money',
+    'A': 'cheat_insane',
 }
 
 
@@ -40,14 +40,14 @@ def _prepend_path(path: Path) -> None:
 
 
 def _autodetect_source_root() -> Path | None:
-    env_value = os.environ.get("SMAC_UNIFIED_SOURCE_ROOT", "").strip()
+    env_value = os.environ.get('SMAC_UNIFIED_SOURCE_ROOT', '').strip()
     if env_value:
         candidate = Path(env_value).expanduser().resolve()
         if candidate.exists():
             return candidate
     here = Path(__file__).resolve()
     for candidate in (here.parents[3], here.parents[2], Path.cwd()):
-        if (candidate / "dependency" / "pysc2-compat").exists():
+        if (candidate / 'dependency' / 'pysc2-compat').exists():
             return candidate
     return None
 
@@ -58,7 +58,7 @@ def _ensure_pysc2_compat(source_root: str | None = None) -> None:
         if source_root
         else _autodetect_source_root()
     )
-    compat = root / "dependency" / "pysc2-compat" if root else None
+    compat = root / 'dependency' / 'pysc2-compat' if root else None
     if compat is not None and compat.exists():
         _prepend_path(compat)
 
@@ -75,9 +75,9 @@ def _ensure_pysc2_compat(source_root: str | None = None) -> None:
 
         import pysc2 as pysc2_pkg
 
-        if "pysc2-compat" not in str(Path(pysc2_pkg.__file__).resolve()):
+        if 'pysc2-compat' not in str(Path(pysc2_pkg.__file__).resolve()):
             for key in list(sys.modules.keys()):
-                if key == "pysc2" or key.startswith("pysc2."):
+                if key == 'pysc2' or key.startswith('pysc2.'):
                     del sys.modules[key]
             importlib.invalidate_caches()
             import pysc2  # noqa: F401  # pylint: disable=unused-import
@@ -88,14 +88,14 @@ class SC2SessionConfig:
     map_name: str
     map_params: MapParams
     step_mul: int = 8
-    difficulty: str = "7"
+    difficulty: str = '7'
     seed: int | None = None
     realtime: bool = False
     ensure_available_actions: bool = True
     pipeline_actions_and_step: bool = False
     pipeline_step_and_observe: bool = False
     reuse_step_observe_requests: bool = False
-    opponent_mode: str = "sc2_computer"
+    opponent_mode: str = 'sc2_computer'
     enable_dual_controller: bool = False
     game_version: str | None = None
     source_root: str | None = None
@@ -128,7 +128,7 @@ class SC2EnvRawSession:
         race_agent = getattr(sc2_env.Race, RACES[self.config.map_params.a_race])
         race_enemy = getattr(sc2_env.Race, RACES[self.config.map_params.b_race])
         difficulty = getattr(
-            sc2_env.Difficulty, DIFFICULTIES.get(self.config.difficulty, "very_hard")
+            sc2_env.Difficulty, DIFFICULTIES.get(self.config.difficulty, 'very_hard')
         )
 
         interface = sc_pb.InterfaceOptions(
@@ -139,7 +139,7 @@ class SC2EnvRawSession:
         )
 
         players: List[Any] = [sc2_env.Agent(race_agent)]
-        if self.config.opponent_mode == "scripted_pool" and self.config.enable_dual_controller:
+        if self.config.opponent_mode == 'scripted_pool' and self.config.enable_dual_controller:
             players.append(sc2_env.Agent(race_enemy))
             self._num_agents = 2
         else:
@@ -173,7 +173,7 @@ class SC2EnvRawSession:
         opponent_actions: Sequence[Any] | None = None,
     ):
         if self._env is None:
-            raise RuntimeError("SC2 session has not been launched.")
+            raise RuntimeError('SC2 session has not been launched.')
 
         if self._num_agents == 1:
             payload = [list(agent_actions)]

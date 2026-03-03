@@ -22,9 +22,9 @@ from .players import (
 
 def build_default_backend_registry() -> BackendRegistry:
     registry = BackendRegistry()
-    registry.register(NativeUnifiedBackend("smac"))
-    registry.register(NativeUnifiedBackend("smacv2"))
-    registry.register(NativeUnifiedBackend("smac-hard"))
+    registry.register(NativeUnifiedBackend('smac'))
+    registry.register(NativeUnifiedBackend('smacv2'))
+    registry.register(NativeUnifiedBackend('smac-hard'))
     registry.register(SmacBridgeBackend())
     registry.register(SmacV2BridgeBackend())
     registry.register(SmacHardBridgeBackend())
@@ -34,7 +34,7 @@ def build_default_backend_registry() -> BackendRegistry:
 @dataclass
 class EnvFactoryConfig:
     family: str
-    map_name: str = "8m"
+    map_name: str = '8m'
     normalized_api: bool = True
     capability_config: Optional[Dict[str, Any]] = None
     # Kept for backward compatibility with earlier smac_unified config style.
@@ -42,7 +42,7 @@ class EnvFactoryConfig:
     # Preferred explicit env kwargs.
     env_kwargs: Dict[str, Any] = field(default_factory=dict)
     source_root: str | None = None
-    backend_mode: str = "native"
+    backend_mode: str = 'native'
     backend_registry: BackendRegistry | None = None
     logic_switches: Dict[str, str] = field(default_factory=dict)
     native_options: Dict[str, Any] = field(default_factory=dict)
@@ -65,7 +65,7 @@ def _default_opponent_runtime(
     switches: VariantSwitches,
     opponent_config: Mapping[str, Any] | None,
 ) -> OpponentRuntime:
-    if switches.opponent_mode == "scripted_pool" or family == "smac-hard":
+    if switches.opponent_mode == 'scripted_pool' or family == 'smac-hard':
         return build_scripted_runtime_from_config(opponent_config or {})
     return EngineBotOpponentRuntime()
 
@@ -73,11 +73,11 @@ def _default_opponent_runtime(
 def make_env(
     *,
     family: str,
-    map_name: str = "8m",
+    map_name: str = '8m',
     normalized_api: bool = True,
     capability_config: Optional[Dict[str, Any]] = None,
     source_root: str | None = None,
-    backend_mode: str = "native",
+    backend_mode: str = 'native',
     backend_registry: BackendRegistry | None = None,
     logic_switches: Mapping[str, str] | None = None,
     native_options: Mapping[str, Any] | None = None,
@@ -95,29 +95,29 @@ def make_env(
     if logic_switches:
         switches = VariantSwitches(
             variant=switches.variant,
-            action_mode=logic_switches.get("action_mode", switches.action_mode),
+            action_mode=logic_switches.get('action_mode', switches.action_mode),
             opponent_mode=logic_switches.get(
-                "opponent_mode", switches.opponent_mode
+                'opponent_mode', switches.opponent_mode
             ),
             capability_mode=logic_switches.get(
-                "capability_mode", switches.capability_mode
+                'capability_mode', switches.capability_mode
             ),
             reward_positive_mode=logic_switches.get(
-                "reward_positive_mode", switches.reward_positive_mode
+                'reward_positive_mode', switches.reward_positive_mode
             ),
             team_init_mode=logic_switches.get(
-                "team_init_mode", switches.team_init_mode
+                'team_init_mode', switches.team_init_mode
             ),
         )
     handler_overrides: Dict[str, Any] = {}
     if action_handler is not None:
-        handler_overrides["action_handler"] = action_handler
-    if _has_callable_attr(observation_handler, "build_agent_obs"):
-        handler_overrides["observation_handler"] = observation_handler
-    if _has_callable_attr(state_handler, "build_state"):
-        handler_overrides["state_handler"] = state_handler
-    if _has_callable_attr(reward_handler, "build_step_reward"):
-        handler_overrides["reward_handler"] = reward_handler
+        handler_overrides['action_handler'] = action_handler
+    if _has_callable_attr(observation_handler, 'build_agent_obs'):
+        handler_overrides['observation_handler'] = observation_handler
+    if _has_callable_attr(state_handler, 'build_state'):
+        handler_overrides['state_handler'] = state_handler
+    if _has_callable_attr(reward_handler, 'build_step_reward'):
+        handler_overrides['reward_handler'] = reward_handler
 
     backend_config = BackendConfig(
         family=family,

@@ -12,33 +12,33 @@ class _Script5:
 
     def script(self, agents, enemies, agent_ability, visible_matrix, episode_step):
         del agents, enemies, agent_ability, visible_matrix, episode_step
-        return ["ok"]
+        return ['ok']
 
 
 def test_scripted_runtime_computes_actions_from_payload():
     runtime = ScriptedOpponentRuntime(
-        script_dict={"3m": [_Script5]},
-        config=ScriptedOpponentConfig(strategy="fixed", fixed_index=0),
+        script_dict={'3m': [_Script5]},
+        config=ScriptedOpponentConfig(strategy='fixed', fixed_index=0),
     )
-    runtime.bind_env(object(), "smac-hard")
+    runtime.bind_env(object(), 'smac-hard')
     runtime.on_reset(
         OpponentEpisodeContext(
-            family="smac-hard",
-            map_name="3m",
+            family='smac-hard',
+            map_name='3m',
         )
     )
     actions = runtime.compute_actions(
         OpponentStepContext(
-            family="smac-hard",
+            family='smac-hard',
             episode_step=0,
             actions=[0, 0, 0],
             payload={
-                "agents": {},
-                "enemies": {},
-                "agent_ability": [],
-                "visible_matrix": {},
-                "episode_step": 0,
+                'agents': {},
+                'enemies': {},
+                'agent_ability': [],
+                'visible_matrix': {},
+                'episode_step': 0,
             },
         )
     )
-    assert actions == ["ok"]
+    assert actions == ['ok']

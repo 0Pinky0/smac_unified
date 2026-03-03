@@ -4,7 +4,7 @@ from .base import VariantLogic
 
 
 class SmacHardVariantLogic(VariantLogic):
-    variant = "smac-hard"
+    variant = 'smac-hard'
 
     def n_actions(self, *, n_agents: int, n_enemies: int) -> int:
         # Match the hard-style padded target branch sizing.

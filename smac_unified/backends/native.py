@@ -8,16 +8,16 @@ from .base import BackendConfig
 def _native_source_paths(config: BackendConfig):
     if config.source_root:
         root = Path(config.source_root).expanduser().resolve()
-        yield root / "dependency" / "pysc2-compat"
+        yield root / 'dependency' / 'pysc2-compat'
         yield root
     else:
         here = Path(__file__).resolve()
         for candidate in (here.parents[3], here.parents[2], Path.cwd()):
-            yield candidate / "dependency" / "pysc2-compat"
+            yield candidate / 'dependency' / 'pysc2-compat'
 
 
 class NativeUnifiedBackend:
-    kind = "native"
+    kind = 'native'
     priority = 10
 
     def __init__(self, family: str):
@@ -39,12 +39,12 @@ class NativeUnifiedBackend:
 
         env_kwargs = dict(config.env_kwargs)
         if config.logic_switches is not None:
-            env_kwargs.setdefault("logic_switches", config.logic_switches)
+            env_kwargs.setdefault('logic_switches', config.logic_switches)
         handler_map = {
-            "action_handler": "action_handler",
-            "observation_handler": "observation_handler",
-            "state_handler": "state_handler",
-            "reward_handler": "reward_handler",
+            'action_handler': 'action_handler',
+            'observation_handler': 'observation_handler',
+            'state_handler': 'state_handler',
+            'reward_handler': 'reward_handler',
         }
         for src_key, dst_key in handler_map.items():
             value = config.handler_overrides.get(src_key)

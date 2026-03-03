@@ -52,7 +52,7 @@ class NativeStarCraft2Env:
         self._source_root = source_root
 
         self.map_params: MapParams = get_map_params(map_name)
-        raw_switches = self._env_kwargs.get("logic_switches")
+        raw_switches = self._env_kwargs.get('logic_switches')
         if isinstance(raw_switches, VariantSwitches):
             self.switches = raw_switches
         else:
@@ -65,44 +65,44 @@ class NativeStarCraft2Env:
         self.n_agents = self.map_params.n_agents
         self.n_enemies = self.map_params.n_enemies
         self.episode_limit = int(
-            self._env_kwargs.get("episode_limit", self.map_params.limit)
+            self._env_kwargs.get('episode_limit', self.map_params.limit)
         )
-        self._move_amount = float(self._env_kwargs.get("move_amount", 2.0))
+        self._move_amount = float(self._env_kwargs.get('move_amount', 2.0))
 
-        self.reward_sparse = bool(self._env_kwargs.get("reward_sparse", False))
+        self.reward_sparse = bool(self._env_kwargs.get('reward_sparse', False))
         self.reward_only_positive = bool(
-            self._env_kwargs.get("reward_only_positive", True)
+            self._env_kwargs.get('reward_only_positive', True)
         )
         self.reward_death_value = float(
-            self._env_kwargs.get("reward_death_value", 10.0)
+            self._env_kwargs.get('reward_death_value', 10.0)
         )
-        self.reward_win = float(self._env_kwargs.get("reward_win", 200.0))
-        self.reward_defeat = float(self._env_kwargs.get("reward_defeat", 0.0))
+        self.reward_win = float(self._env_kwargs.get('reward_win', 200.0))
+        self.reward_defeat = float(self._env_kwargs.get('reward_defeat', 0.0))
         self.reward_negative_scale = float(
-            self._env_kwargs.get("reward_negative_scale", 0.5)
+            self._env_kwargs.get('reward_negative_scale', 0.5)
         )
-        self.reward_scale = bool(self._env_kwargs.get("reward_scale", True))
+        self.reward_scale = bool(self._env_kwargs.get('reward_scale', True))
         self.reward_scale_rate = float(
-            self._env_kwargs.get("reward_scale_rate", 20.0)
+            self._env_kwargs.get('reward_scale_rate', 20.0)
         )
         self.state_last_action = bool(
-            self._env_kwargs.get("state_last_action", True)
+            self._env_kwargs.get('state_last_action', True)
         )
-        self._seed = self._env_kwargs.get("seed")
+        self._seed = self._env_kwargs.get('seed')
         self._action_handler: ActionHandler = (
-            self._env_kwargs.get("action_handler")
+            self._env_kwargs.get('action_handler')
             or DefaultActionHandler()
         )
         self._observation_handler: ObservationHandler = (
-            self._env_kwargs.get("observation_handler")
+            self._env_kwargs.get('observation_handler')
             or DefaultObservationHandler()
         )
         self._state_handler: StateHandler = (
-            self._env_kwargs.get("state_handler")
+            self._env_kwargs.get('state_handler')
             or DefaultStateHandler()
         )
         self._reward_handler: RewardHandler = (
-            self._env_kwargs.get("reward_handler")
+            self._env_kwargs.get('reward_handler')
             or DefaultRewardHandler()
         )
 
@@ -121,7 +121,7 @@ class NativeStarCraft2Env:
 
         self._session = self._build_session()
         self._opponent_runtime: OpponentRuntime | None = None
-        self._runtime_lifecycle_owner = "env"
+        self._runtime_lifecycle_owner = 'env'
 
         self._episode_steps = 0
         self._total_steps = 0
@@ -150,27 +150,27 @@ class NativeStarCraft2Env:
         cfg = SC2SessionConfig(
             map_name=self.map_name,
             map_params=self.map_params,
-            step_mul=int(self._env_kwargs.get("step_mul", 8)),
-            difficulty=str(self._env_kwargs.get("difficulty", "7")),
+            step_mul=int(self._env_kwargs.get('step_mul', 8)),
+            difficulty=str(self._env_kwargs.get('difficulty', '7')),
             seed=self._seed,
-            realtime=bool(self._env_kwargs.get("realtime", False)),
+            realtime=bool(self._env_kwargs.get('realtime', False)),
             ensure_available_actions=bool(
-                self._native_options.get("ensure_available_actions", True)
+                self._native_options.get('ensure_available_actions', True)
             ),
             pipeline_actions_and_step=bool(
-                self._native_options.get("pipeline_actions_and_step", False)
+                self._native_options.get('pipeline_actions_and_step', False)
             ),
             pipeline_step_and_observe=bool(
-                self._native_options.get("pipeline_step_and_observe", False)
+                self._native_options.get('pipeline_step_and_observe', False)
             ),
             reuse_step_observe_requests=bool(
-                self._native_options.get("reuse_step_observe_requests", False)
+                self._native_options.get('reuse_step_observe_requests', False)
             ),
             opponent_mode=self.switches.opponent_mode,
             enable_dual_controller=bool(
-                self._native_options.get("enable_dual_controller", False)
+                self._native_options.get('enable_dual_controller', False)
             ),
-            game_version=self._env_kwargs.get("game_version"),
+            game_version=self._env_kwargs.get('game_version'),
             source_root=self._source_root,
         )
         return SC2EnvRawSession(cfg)
@@ -224,7 +224,7 @@ class NativeStarCraft2Env:
 
         if (
             self._opponent_runtime is not None
-            and self._runtime_lifecycle_owner == "env"
+            and self._runtime_lifecycle_owner == 'env'
         ):
             self._opponent_runtime.on_reset(
                 OpponentEpisodeContext(
@@ -292,12 +292,12 @@ class NativeStarCraft2Env:
             frame=self._unit_frame,
             context=self._handler_context,
         )
-        info = {"battle_won": False}
+        info = {'battle_won': False}
         battle_code = self._battle_outcome_code()
         if battle_code is not None:
             terminated = True
             if battle_code == 1:
-                info["battle_won"] = True
+                info['battle_won'] = True
                 if not self.reward_sparse:
                     reward += self.reward_win
                 else:
@@ -309,7 +309,7 @@ class NativeStarCraft2Env:
                     reward = -1.0
         elif self._episode_steps >= self.episode_limit:
             terminated = True
-            info["episode_limit"] = True
+            info['episode_limit'] = True
 
         if terminated:
             self._episode_count += 1
@@ -319,7 +319,7 @@ class NativeStarCraft2Env:
     def close(self) -> None:
         if (
             self._opponent_runtime is not None
-            and self._runtime_lifecycle_owner == "env"
+            and self._runtime_lifecycle_owner == 'env'
         ):
             self._opponent_runtime.close()
         self._session.close()
@@ -375,24 +375,24 @@ class NativeStarCraft2Env:
 
     def get_env_info(self):
         return {
-            "state_shape": self.get_state_size(),
-            "obs_shape": self.get_obs_size(),
-            "n_actions": self.n_actions,
-            "n_agents": self.n_agents,
-            "episode_limit": self.episode_limit,
-            "variant": self.variant,
-            "switches": {
-                "action_mode": self.switches.action_mode,
-                "opponent_mode": self.switches.opponent_mode,
-                "capability_mode": self.switches.capability_mode,
-                "reward_positive_mode": self.switches.reward_positive_mode,
-                "team_init_mode": self.switches.team_init_mode,
+            'state_shape': self.get_state_size(),
+            'obs_shape': self.get_obs_size(),
+            'n_actions': self.n_actions,
+            'n_agents': self.n_agents,
+            'episode_limit': self.episode_limit,
+            'variant': self.variant,
+            'switches': {
+                'action_mode': self.switches.action_mode,
+                'opponent_mode': self.switches.opponent_mode,
+                'capability_mode': self.switches.capability_mode,
+                'reward_positive_mode': self.switches.reward_positive_mode,
+                'team_init_mode': self.switches.team_init_mode,
             },
-            "scripted_dual_controller_active": bool(
-                self.switches.opponent_mode == "scripted_pool"
+            'scripted_dual_controller_active': bool(
+                self.switches.opponent_mode == 'scripted_pool'
                 and self._session.num_agents == 2
             ),
-            "native_backend": True,
+            'native_backend': True,
         }
 
     def _sync_map_geometry(self) -> None:
@@ -445,10 +445,10 @@ class NativeStarCraft2Env:
         raw_units = list(self._obs.observation.raw_data.units)
         allies = [u for u in raw_units if u.owner == 1]
         enemies = [u for u in raw_units if u.owner == 2]
-        allies_sorted = sorted(allies, key=attrgetter("unit_type", "pos.x", "pos.y"))
+        allies_sorted = sorted(allies, key=attrgetter('unit_type', 'pos.x', 'pos.y'))
         enemies_sorted = sorted(
             enemies,
-            key=attrgetter("unit_type", "pos.x", "pos.y"),
+            key=attrgetter('unit_type', 'pos.x', 'pos.y'),
         )
         return allies_sorted, enemies_sorted
 
@@ -494,7 +494,7 @@ class NativeStarCraft2Env:
 
     def _only_medivac_left(self, ally: bool) -> bool:
         medivac_id = self._unit_ids.medivac_id
-        if self.map_params.map_type != "MMM" or medivac_id <= 0:
+        if self.map_params.map_type != 'MMM' or medivac_id <= 0:
             return False
         if self._unit_frame is None:
             return False

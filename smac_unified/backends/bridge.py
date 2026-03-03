@@ -10,7 +10,7 @@ from .base import BackendConfig
 
 
 def _autodetect_source_root() -> Path | None:
-    env_value = os.environ.get("SMAC_UNIFIED_SOURCE_ROOT", "").strip()
+    env_value = os.environ.get('SMAC_UNIFIED_SOURCE_ROOT', '').strip()
     if env_value:
         path = Path(env_value).expanduser().resolve()
         if path.exists():
@@ -19,7 +19,7 @@ def _autodetect_source_root() -> Path | None:
     here = Path(__file__).resolve()
     candidates = [here.parents[3], here.parents[2], Path.cwd()]
     for candidate in candidates:
-        if (candidate / "implementation" / "smac").exists():
+        if (candidate / 'implementation' / 'smac').exists():
             return candidate
     return None
 
@@ -37,10 +37,10 @@ def _bootstrap_source_paths(source_root: Path | None) -> None:
 
     candidates = [
         source_root,
-        source_root / "implementation" / "smac",
-        source_root / "implementation" / "smacv2",
-        source_root / "implementation" / "smac-hard",
-        source_root / "dependency" / "pysc2-compat",
+        source_root / 'implementation' / 'smac',
+        source_root / 'implementation' / 'smacv2',
+        source_root / 'implementation' / 'smac-hard',
+        source_root / 'dependency' / 'pysc2-compat',
     ]
     for path in candidates:
         if path.exists():
@@ -64,15 +64,15 @@ def _import_symbol(
             return getattr(module, symbol_name)
         except Exception as second_exc:
             raise ImportError(
-                f"Unable to import {symbol_name} from {module_name}. "
-                "Install legacy SMAC backends or provide sources via "
-                "`source_root` / SMAC_UNIFIED_SOURCE_ROOT."
+                f'Unable to import {symbol_name} from {module_name}. '
+                'Install legacy SMAC backends or provide sources via '
+                '`source_root` / SMAC_UNIFIED_SOURCE_ROOT.'
             ) from second_exc
 
 
 class SmacBridgeBackend:
-    family = "smac"
-    kind = "bridge"
+    family = 'smac'
+    kind = 'bridge'
     priority = 100
 
     def is_available(self, config: BackendConfig) -> bool:
@@ -81,18 +81,18 @@ class SmacBridgeBackend:
 
     def make_env(self, config: BackendConfig):
         constructor = _import_symbol(
-            "smac.env",
-            "StarCraft2Env",
+            'smac.env',
+            'StarCraft2Env',
             source_root=config.source_root,
         )
         kwargs = dict(config.env_kwargs)
-        kwargs.setdefault("map_name", config.map_name)
+        kwargs.setdefault('map_name', config.map_name)
         return constructor(**kwargs)
 
 
 class SmacV2BridgeBackend:
-    family = "smacv2"
-    kind = "bridge"
+    family = 'smacv2'
+    kind = 'bridge'
     priority = 100
 
     def is_available(self, config: BackendConfig) -> bool:
@@ -101,27 +101,27 @@ class SmacV2BridgeBackend:
 
     def make_env(self, config: BackendConfig):
         kwargs = dict(config.env_kwargs)
-        kwargs.setdefault("map_name", config.map_name)
+        kwargs.setdefault('map_name', config.map_name)
         if config.capability_config is not None:
             constructor = _import_symbol(
-                "smacv2.env.starcraft2.wrapper",
-                "StarCraftCapabilityEnvWrapper",
+                'smacv2.env.starcraft2.wrapper',
+                'StarCraftCapabilityEnvWrapper',
                 source_root=config.source_root,
             )
-            kwargs["capability_config"] = config.capability_config
+            kwargs['capability_config'] = config.capability_config
             return constructor(**kwargs)
 
         constructor = _import_symbol(
-            "smacv2.env",
-            "StarCraft2Env",
+            'smacv2.env',
+            'StarCraft2Env',
             source_root=config.source_root,
         )
         return constructor(**kwargs)
 
 
 class SmacHardBridgeBackend:
-    family = "smac-hard"
-    kind = "bridge"
+    family = 'smac-hard'
+    kind = 'bridge'
     priority = 100
 
     def is_available(self, config: BackendConfig) -> bool:
@@ -130,11 +130,11 @@ class SmacHardBridgeBackend:
 
     def make_env(self, config: BackendConfig):
         constructor = _import_symbol(
-            "smac_hard.env",
-            "StarCraft2Env",
+            'smac_hard.env',
+            'StarCraft2Env',
             source_root=config.source_root,
         )
         kwargs = dict(config.env_kwargs)
-        kwargs.setdefault("map_name", config.map_name)
-        kwargs.setdefault("debug", False)
+        kwargs.setdefault('map_name', config.map_name)
+        kwargs.setdefault('debug', False)
         return constructor(**kwargs)

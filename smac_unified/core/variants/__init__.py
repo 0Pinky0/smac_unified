@@ -12,20 +12,20 @@ def build_variant_logic(
     switches: VariantSwitches,
     map_params: MapParams,
 ) -> VariantLogic:
-    if switches.variant == "smac":
+    if switches.variant == 'smac':
         return SmacVariantLogic(switches, map_params)
-    if switches.variant == "smacv2":
+    if switches.variant == 'smacv2':
         return SmacV2VariantLogic(switches, map_params)
-    if switches.variant == "smac-hard":
+    if switches.variant == 'smac-hard':
         return SmacHardVariantLogic(switches, map_params)
-    raise ValueError(f"Unsupported variant {switches.variant!r}")
+    raise ValueError(f'Unsupported variant {switches.variant!r}')
 
 
 __all__ = [
-    "UnitTypeIds",
-    "VariantLogic",
-    "SmacVariantLogic",
-    "SmacV2VariantLogic",
-    "SmacHardVariantLogic",
-    "build_variant_logic",
+    'UnitTypeIds',
+    'VariantLogic',
+    'SmacVariantLogic',
+    'SmacV2VariantLogic',
+    'SmacHardVariantLogic',
+    'build_variant_logic',
 ]

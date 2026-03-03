@@ -11,13 +11,13 @@ from .logic_switches import (
 )
 
 __all__ = [
-    "ActionMode",
-    "CapabilityMode",
-    "OpponentMode",
-    "RewardPositiveMode",
-    "TeamInitMode",
-    "VariantName",
-    "VariantSwitches",
-    "default_switches",
-    "merge_switches",
+    'ActionMode',
+    'CapabilityMode',
+    'OpponentMode',
+    'RewardPositiveMode',
+    'TeamInitMode',
+    'VariantName',
+    'VariantSwitches',
+    'default_switches',
+    'merge_switches',
 ]

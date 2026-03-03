@@ -12,7 +12,7 @@ ATTACK_ABILITY_ID = 23
 
 class BaseScriptPolicy:
     def __init__(self, map_name: str | None = None):
-        self.map_name = map_name or ""
+        self.map_name = map_name or ''
 
     def script(self, agents, enemies, agent_ability, visible_matrix=None, iteration=0):
         del agents, enemies, agent_ability, visible_matrix, iteration
@@ -49,7 +49,7 @@ def default_script_pool(map_name: str) -> List[type]:
 
 
 def _alive_units(units: Iterable[Any]) -> List[Any]:
-    return [unit for unit in units if getattr(unit, "health", 0) > 0]
+    return [unit for unit in units if getattr(unit, 'health', 0) > 0]
 
 
 def _distance(src, dst) -> float:

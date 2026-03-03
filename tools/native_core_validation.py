@@ -20,9 +20,9 @@ def _ensure_project_on_path() -> None:
 
 
 DEFAULT_MAPS = {
-    "smac": "3m",
-    "smacv2": "8m",
-    "smac-hard": "3m",
+    'smac': '3m',
+    'smacv2': '8m',
+    'smac-hard': '3m',
 }
 
 
@@ -35,7 +35,7 @@ class CaseResult:
     elapsed_s: float
     steps: int
     sps: float
-    error: str = ""
+    error: str = ''
 
 
 def _run_case(
@@ -91,7 +91,7 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
     proc = subprocess.run(
         [
             sys.executable,
-            "-c",
+            '-c',
             runner,
             str(Path(__file__).resolve().parents[1]),
             family,
@@ -104,7 +104,7 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
     )
     elapsed_total = max(time.perf_counter() - t0, 1e-9)
     if proc.returncode != 0:
-        error = proc.stderr.strip() or proc.stdout.strip() or "unknown failure"
+        error = proc.stderr.strip() or proc.stdout.strip() or 'unknown failure'
         return CaseResult(
             family=family,
             map_name=map_name,
@@ -119,10 +119,10 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
     lines = [line.strip() for line in proc.stdout.splitlines() if line.strip()]
     payload = {}
     for line in reversed(lines):
-        if line.startswith("{") and line.endswith("}"):
+        if line.startswith('{') and line.endswith('}'):
             payload = json.loads(line)
             break
-    elapsed = float(payload.get("elapsed_s", elapsed_total))
+    elapsed = float(payload.get('elapsed_s', elapsed_total))
     return CaseResult(
         family=family,
         map_name=map_name,
@@ -138,17 +138,17 @@ def _summarize(results: List[CaseResult]) -> Dict[str, Dict[str, float]]:
     summary: Dict[str, Dict[str, float]] = {}
     for family in sorted({row.family for row in results}):
         by_mode = {row.backend_mode: row for row in results if row.family == family}
-        native = by_mode.get("native")
-        bridge = by_mode.get("bridge")
+        native = by_mode.get('native')
+        bridge = by_mode.get('bridge')
         payload: Dict[str, float] = {}
         if native:
-            payload["native_ok"] = float(native.ok)
-            payload["native_sps"] = native.sps
+            payload['native_ok'] = float(native.ok)
+            payload['native_sps'] = native.sps
         if bridge:
-            payload["bridge_ok"] = float(bridge.ok)
-            payload["bridge_sps"] = bridge.sps
+            payload['bridge_ok'] = float(bridge.ok)
+            payload['bridge_sps'] = bridge.sps
         if native and bridge and bridge.sps > 0:
-            payload["native_vs_bridge_delta_pct"] = (
+            payload['native_vs_bridge_delta_pct'] = (
                 (native.sps - bridge.sps) * 100.0 / bridge.sps
             )
         summary[family] = payload
@@ -161,23 +161,23 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(
         description=(
-            "Run core-first standalone validation for native and bridge backends."
+            'Run core-first standalone validation for native and bridge backends.'
         )
     )
     parser.add_argument(
-        "--families",
-        nargs="+",
-        default=["smac", "smacv2", "smac-hard"],
-        choices=["smac", "smacv2", "smac-hard"],
+        '--families',
+        nargs='+',
+        default=['smac', 'smacv2', 'smac-hard'],
+        choices=['smac', 'smacv2', 'smac-hard'],
     )
-    parser.add_argument("--steps", type=int, default=5)
-    parser.add_argument("--output-json", default="tools/native_core_validation.json")
+    parser.add_argument('--steps', type=int, default=5)
+    parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
 
     results: List[CaseResult] = []
     for family in args.families:
         map_name = DEFAULT_MAPS[family]
-        for backend_mode in ("native", "bridge"):
+        for backend_mode in ('native', 'bridge'):
             row = _run_case(
                 family=family,
                 map_name=map_name,
@@ -186,26 +186,26 @@ def main() -> int:
                 make_env_fn=make_env,
             )
             results.append(row)
-            status = "PASS" if row.ok else "FAIL"
+            status = 'PASS' if row.ok else 'FAIL'
             print(
-                f"[{status}] family={family} mode={backend_mode} map={map_name} "
-                f"sps={row.sps:.3f} elapsed={row.elapsed_s:.3f}s error={row.error}"
+                f'[{status}] family={family} mode={backend_mode} map={map_name} '
+                f'sps={row.sps:.3f} elapsed={row.elapsed_s:.3f}s error={row.error}'
             )
 
     summary = _summarize(results)
     output = {
-        "results": [asdict(row) for row in results],
-        "summary": summary,
+        'results': [asdict(row) for row in results],
+        'summary': summary,
     }
     output_path = Path(args.output_json)
     output_path.parent.mkdir(parents=True, exist_ok=True)
-    output_path.write_text(json.dumps(output, indent=2), encoding="utf-8")
-    print(f"Wrote validation report: {output_path}")
+    output_path.write_text(json.dumps(output, indent=2), encoding='utf-8')
+    print(f'Wrote validation report: {output_path}')
 
     if not all(row.ok for row in results):
         return 1
     return 0
 
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     raise SystemExit(main())

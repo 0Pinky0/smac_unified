@@ -4,4 +4,4 @@ from .base import VariantLogic
 
 
 class SmacVariantLogic(VariantLogic):
-    variant = "smac"
+    variant = 'smac'
