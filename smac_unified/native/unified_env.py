@@ -7,9 +7,7 @@ from typing import Any, Dict, List, Mapping, Sequence
 import numpy as np
 
 from ..config import VariantSwitches, merge_switches
-from ..maps import MapParams, get_map_params
-from ..opponents import OpponentEpisodeContext, OpponentRuntime
-from .builders import (
+from ..builders import (
     DefaultNativeActionBuilder,
     DefaultNativeObservationBuilder,
     DefaultNativeRewardBuilder,
@@ -19,6 +17,8 @@ from .builders import (
     NativeRewardBuilder,
     NativeStateBuilder,
 )
+from ..maps import MapParams, get_map_params
+from ..opponents import OpponentEpisodeContext, OpponentRuntime
 from .session_sc2env import SC2EnvRawSession, SC2SessionConfig
 from .variants import UnitTypeIds, VariantLogic, build_variant_logic
 
