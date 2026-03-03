@@ -14,7 +14,7 @@ from .builders import (
     RewardContext,
     StateBuilder,
 )
-from .opponents import (
+from .players import (
     EngineBotOpponentRuntime,
     OpponentEpisodeContext,
     OpponentRuntime,

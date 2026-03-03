@@ -13,7 +13,7 @@ from .backends import (
     SmacV2BridgeBackend,
 )
 from .config import VariantSwitches, default_switches
-from .opponents import (
+from .players import (
     EngineBotOpponentRuntime,
     OpponentRuntime,
     build_scripted_runtime_from_config,

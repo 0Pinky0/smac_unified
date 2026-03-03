@@ -8,7 +8,7 @@ from s2clientprotocol import query_pb2 as q_pb
 from s2clientprotocol import raw_pb2 as r_pb
 from s2clientprotocol import sc2api_pb2 as sc_pb
 
-from ..opponents import OpponentStepContext
+from ..players import OpponentStepContext
 from .base import (
     BuilderContext,
     BuildContext,

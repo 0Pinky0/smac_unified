@@ -47,7 +47,7 @@ from .native import (
     SC2EnvRawSession,
     SC2SessionConfig,
 )
-from .opponents import (
+from .players import (
     EngineBotOpponentRuntime,
     HardScriptCompatibilityWrapper,
     OpponentEpisodeContext,

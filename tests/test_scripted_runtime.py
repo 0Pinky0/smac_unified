@@ -1,4 +1,4 @@
-from smac_unified.opponents import (
+from smac_unified.players import (
     OpponentEpisodeContext,
     OpponentStepContext,
     ScriptedOpponentConfig,
