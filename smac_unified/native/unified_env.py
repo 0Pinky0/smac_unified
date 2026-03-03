@@ -5,24 +5,22 @@ from operator import attrgetter
 from typing import Any, Dict, List, Mapping, Sequence
 
 import numpy as np
-from s2clientprotocol import common_pb2 as sc_common
-from s2clientprotocol import query_pb2 as q_pb
-from s2clientprotocol import raw_pb2 as r_pb
-from s2clientprotocol import sc2api_pb2 as sc_pb
 
 from ..config import VariantSwitches, merge_switches
 from ..maps import MapParams, get_map_params
-from ..opponents import OpponentEpisodeContext, OpponentRuntime, OpponentStepContext
+from ..opponents import OpponentEpisodeContext, OpponentRuntime
+from .builders import (
+    DefaultNativeActionBuilder,
+    DefaultNativeObservationBuilder,
+    DefaultNativeRewardBuilder,
+    DefaultNativeStateBuilder,
+    NativeActionBuilder,
+    NativeObservationBuilder,
+    NativeRewardBuilder,
+    NativeStateBuilder,
+)
 from .session_sc2env import SC2EnvRawSession, SC2SessionConfig
 from .variants import UnitTypeIds, VariantLogic, build_variant_logic
-
-
-ACTIONS = {
-    "move": 16,
-    "attack": 23,
-    "stop": 4,
-    "heal": 386,
-}
 
 
 class NativeStarCraft2Env:
@@ -89,6 +87,22 @@ class NativeStarCraft2Env:
             self._env_kwargs.get("state_last_action", True)
         )
         self._seed = self._env_kwargs.get("seed")
+        self._action_builder: NativeActionBuilder = (
+            self._env_kwargs.get("native_action_builder")
+            or DefaultNativeActionBuilder()
+        )
+        self._observation_builder: NativeObservationBuilder = (
+            self._env_kwargs.get("native_observation_builder")
+            or DefaultNativeObservationBuilder()
+        )
+        self._state_builder: NativeStateBuilder = (
+            self._env_kwargs.get("native_state_builder")
+            or DefaultNativeStateBuilder()
+        )
+        self._reward_builder: NativeRewardBuilder = (
+            self._env_kwargs.get("native_reward_builder")
+            or DefaultNativeRewardBuilder()
+        )
 
         self._attack_slots = max(self.n_agents, self.n_enemies)
         self.n_actions = self._variant_logic.n_actions(
@@ -96,6 +110,12 @@ class NativeStarCraft2Env:
             n_enemies=self.n_enemies,
         )
         self.n_actions_no_attack = 6
+        self._obs_vector_size = (
+            4
+            + self._attack_slots * 6
+            + max(self.n_agents - 1, 1) * 6
+            + 4
+        )
 
         self._session = self._build_session()
         self._opponent_runtime: OpponentRuntime | None = None
@@ -119,14 +139,6 @@ class NativeStarCraft2Env:
         self.reward = 0.0
         self.last_action = np.zeros((self.n_agents, self.n_actions), dtype=np.float32)
         self._action_eye = np.eye(self.n_actions, dtype=np.float32)
-
-        self.death_tracker_ally = np.zeros(self.n_agents, dtype=np.int8)
-        self.death_tracker_enemy = np.zeros(self.n_enemies, dtype=np.int8)
-        self.prev_ally_health = np.zeros(self.n_agents, dtype=np.float32)
-        self.prev_ally_shield = np.zeros(self.n_agents, dtype=np.float32)
-        self.prev_enemy_health = np.zeros(self.n_enemies, dtype=np.float32)
-        self.prev_enemy_shield = np.zeros(self.n_enemies, dtype=np.float32)
-        self._avail_actions_cache: Dict[int, List[int]] = {}
 
     def _build_session(self) -> SC2EnvRawSession:
         cfg = SC2SessionConfig(
@@ -173,10 +185,8 @@ class NativeStarCraft2Env:
 
         self._episode_steps = 0
         self.reward = 0.0
-        self.death_tracker_ally.fill(0)
-        self.death_tracker_enemy.fill(0)
         self.last_action.fill(0.0)
-        self._avail_actions_cache.clear()
+        self._action_builder.reset(self)
 
         self._latest_timesteps = self._session.reset()
         self._obs = self._latest_timesteps[0].observation
@@ -189,7 +199,7 @@ class NativeStarCraft2Env:
         self._rebuild_units()
         self._init_unit_type_ids()
         self._init_max_reward()
-        self._snapshot_previous_health()
+        self._reward_builder.reset(self)
 
         if self._opponent_runtime is not None:
             self._opponent_runtime.on_reset(
@@ -209,15 +219,23 @@ class NativeStarCraft2Env:
             actions_int.extend([0] * (self.n_agents - len(actions_int)))
         actions_int = actions_int[: self.n_agents]
         self.last_action = self._action_eye[np.asarray(actions_int, dtype=np.int64)]
-        self._avail_actions_cache.clear()
+        self._action_builder.reset(self)
 
-        ally_sc_actions: List[sc_pb.Action] = []
+        ally_sc_actions: List[Any] = []
         for agent_id, action in enumerate(actions_int):
-            sc_action = self._build_agent_action(agent_id, action)
+            sc_action = self._action_builder.build_agent_action(
+                self,
+                agent_id,
+                action,
+            )
             if sc_action is not None:
                 ally_sc_actions.append(sc_action)
 
-        opponent_actions = self._build_opponent_actions(actions_int)
+        opponent_actions = self._action_builder.build_opponent_actions(
+            self,
+            actions_int,
+            self._opponent_runtime,
+        )
         self._latest_timesteps = self._session.step(
             agent_actions=ally_sc_actions,
             opponent_actions=opponent_actions,
@@ -234,7 +252,7 @@ class NativeStarCraft2Env:
         self._rebuild_units()
 
         terminated = bool(self._latest_timesteps[0].last())
-        reward = self._compute_reward()
+        reward = self._reward_builder.build_step_reward(self)
         info = {"battle_won": False}
         battle_code = self._battle_outcome_code()
         if battle_code is not None:
@@ -269,98 +287,19 @@ class NativeStarCraft2Env:
         return int(self._episode_steps)
 
     def get_obs(self):
-        return [self.get_obs_agent(agent_id) for agent_id in range(self.n_agents)]
+        return self._observation_builder.build_obs(self)
 
     def get_obs_agent(self, agent_id: int):
-        unit = self.agents.get(agent_id)
-        if unit is None:
-            return np.zeros(self.get_obs_size(), dtype=np.float32)
-
-        avail = self.get_avail_agent_actions(agent_id)
-        move_feats = np.asarray(avail[2:6], dtype=np.float32)
-
-        enemy_feats = np.zeros((self._attack_slots, 6), dtype=np.float32)
-        enemy_items = list(self.enemies.items())[: self._attack_slots]
-        sight_range = self._unit_sight_range(agent_id)
-        for slot, (_, enemy) in enumerate(enemy_items):
-            if enemy.health <= 0:
-                continue
-            dist = self._distance(unit.pos.x, unit.pos.y, enemy.pos.x, enemy.pos.y)
-            enemy_feats[slot, 0] = 1.0
-            enemy_feats[slot, 1] = float(avail[self.n_actions_no_attack + slot])
-            enemy_feats[slot, 2] = dist / max(sight_range, 1.0)
-            enemy_feats[slot, 3] = (enemy.pos.x - unit.pos.x) / max(self.max_distance_x, 1.0)
-            enemy_feats[slot, 4] = (enemy.pos.y - unit.pos.y) / max(self.max_distance_y, 1.0)
-            enemy_feats[slot, 5] = enemy.health / max(enemy.health_max, 1.0)
-
-        ally_dim = max(self.n_agents - 1, 1)
-        ally_feats = np.zeros((ally_dim, 6), dtype=np.float32)
-        ally_slot = 0
-        for ally_id, ally in self.agents.items():
-            if ally_id == agent_id:
-                continue
-            if ally_slot >= ally_dim:
-                break
-            if ally.health > 0:
-                dist = self._distance(unit.pos.x, unit.pos.y, ally.pos.x, ally.pos.y)
-                ally_feats[ally_slot, 0] = 1.0
-                ally_feats[ally_slot, 1] = dist / max(sight_range, 1.0)
-                ally_feats[ally_slot, 2] = (ally.pos.x - unit.pos.x) / max(
-                    self.max_distance_x, 1.0
-                )
-                ally_feats[ally_slot, 3] = (ally.pos.y - unit.pos.y) / max(
-                    self.max_distance_y, 1.0
-                )
-                ally_feats[ally_slot, 4] = ally.health / max(ally.health_max, 1.0)
-                ally_feats[ally_slot, 5] = ally.shield / max(ally.shield_max, 1.0)
-            ally_slot += 1
-
-        own_feats = np.asarray(
-            [
-                unit.health / max(unit.health_max, 1.0),
-                unit.shield / max(unit.shield_max, 1.0),
-                unit.pos.x / max(self.map_x, 1.0),
-                unit.pos.y / max(self.map_y, 1.0),
-            ],
-            dtype=np.float32,
-        )
-        return np.concatenate(
-            (
-                move_feats.flatten(),
-                enemy_feats.flatten(),
-                ally_feats.flatten(),
-                own_feats.flatten(),
-            ),
-            axis=0,
-        )
+        return self._observation_builder.build_agent_obs(self, agent_id)
 
     def get_state(self):
-        ally_state = np.zeros((self.n_agents, 5), dtype=np.float32)
-        for agent_id, unit in self.agents.items():
-            ally_state[agent_id, 0] = unit.health / max(unit.health_max, 1.0)
-            ally_state[agent_id, 1] = unit.shield / max(unit.shield_max, 1.0)
-            ally_state[agent_id, 2] = unit.weapon_cooldown / 30.0
-            ally_state[agent_id, 3] = unit.pos.x / max(self.map_x, 1.0)
-            ally_state[agent_id, 4] = unit.pos.y / max(self.map_y, 1.0)
-
-        enemy_state = np.zeros((self.n_enemies, 5), dtype=np.float32)
-        for enemy_id, unit in self.enemies.items():
-            enemy_state[enemy_id, 0] = unit.health / max(unit.health_max, 1.0)
-            enemy_state[enemy_id, 1] = unit.shield / max(unit.shield_max, 1.0)
-            enemy_state[enemy_id, 2] = unit.weapon_cooldown / 30.0
-            enemy_state[enemy_id, 3] = unit.pos.x / max(self.map_x, 1.0)
-            enemy_state[enemy_id, 4] = unit.pos.y / max(self.map_y, 1.0)
-
-        chunks = [ally_state.flatten(), enemy_state.flatten()]
-        if self.state_last_action:
-            chunks.append(self.last_action.flatten())
-        return np.concatenate(chunks, axis=0).astype(np.float32)
+        return self._state_builder.build_state(self)
 
     def get_state_size(self):
         return int(self.get_state().shape[0])
 
     def get_obs_size(self):
-        return int(self.get_obs_agent(0).shape[0])
+        return int(self._obs_vector_size)
 
     def get_avail_actions(self):
         return [
@@ -369,43 +308,7 @@ class NativeStarCraft2Env:
         ]
 
     def get_avail_agent_actions(self, agent_id: int):
-        cached = self._avail_actions_cache.get(agent_id)
-        if cached is not None:
-            return cached
-
-        unit = self.agents.get(agent_id)
-        if unit is None or unit.health <= 0:
-            dead = [1] + [0] * (self.n_actions - 1)
-            self._avail_actions_cache[agent_id] = dead
-            return dead
-
-        avail = [0] * self.n_actions
-        avail[1] = 1  # stop
-        if self._can_move(unit, dx=0.0, dy=self._move_amount):
-            avail[2] = 1
-        if self._can_move(unit, dx=0.0, dy=-self._move_amount):
-            avail[3] = 1
-        if self._can_move(unit, dx=self._move_amount, dy=0.0):
-            avail[4] = 1
-        if self._can_move(unit, dx=-self._move_amount, dy=0.0):
-            avail[5] = 1
-
-        targets = self._attack_targets_for_unit(unit)
-        unit_range = self._unit_shoot_range(unit)
-        for slot in range(self._attack_slots):
-            if slot >= len(targets):
-                break
-            target = targets[slot]
-            if target.health <= 0:
-                continue
-            dist = self._distance(unit.pos.x, unit.pos.y, target.pos.x, target.pos.y)
-            if dist <= unit_range:
-                action_id = self.n_actions_no_attack + slot
-                if action_id < self.n_actions:
-                    avail[action_id] = 1
-
-        self._avail_actions_cache[agent_id] = avail
-        return avail
+        return self._action_builder.get_avail_agent_actions(self, agent_id)
 
     def get_env_info(self):
         return {
@@ -480,77 +383,6 @@ class NativeStarCraft2Env:
         )
         self.max_reward += self.reward_win
 
-    def _snapshot_previous_health(self) -> None:
-        self.prev_ally_health.fill(0.0)
-        self.prev_ally_shield.fill(0.0)
-        self.prev_enemy_health.fill(0.0)
-        self.prev_enemy_shield.fill(0.0)
-        for agent_id, unit in self.agents.items():
-            self.prev_ally_health[agent_id] = unit.health
-            self.prev_ally_shield[agent_id] = unit.shield
-        for enemy_id, unit in self.enemies.items():
-            self.prev_enemy_health[enemy_id] = unit.health
-            self.prev_enemy_shield[enemy_id] = unit.shield
-
-    def _compute_reward(self) -> float:
-        if self.reward_sparse:
-            return 0.0
-
-        reward = 0.0
-        delta_deaths = 0.0
-        delta_ally = 0.0
-        delta_enemy = 0.0
-        neg_scale = self.reward_negative_scale
-
-        for agent_id in range(self.n_agents):
-            unit = self.agents.get(agent_id)
-            prev_health = self.prev_ally_health[agent_id] + self.prev_ally_shield[agent_id]
-            if unit is None or unit.health <= 0:
-                if self.death_tracker_ally[agent_id] == 0 and prev_health > 0:
-                    self.death_tracker_ally[agent_id] = 1
-                    if not self.reward_only_positive:
-                        delta_deaths -= self.reward_death_value * neg_scale
-                    delta_ally += prev_health * neg_scale
-            else:
-                if self.death_tracker_ally[agent_id] == 0:
-                    cur_health = unit.health + unit.shield
-                    delta_ally += max(prev_health - cur_health, 0.0) * neg_scale
-
-            if unit is not None:
-                self.prev_ally_health[agent_id] = unit.health
-                self.prev_ally_shield[agent_id] = unit.shield
-            else:
-                self.prev_ally_health[agent_id] = 0.0
-                self.prev_ally_shield[agent_id] = 0.0
-
-        for enemy_id in range(self.n_enemies):
-            unit = self.enemies.get(enemy_id)
-            prev_health = self.prev_enemy_health[enemy_id] + self.prev_enemy_shield[enemy_id]
-            if unit is None or unit.health <= 0:
-                if self.death_tracker_enemy[enemy_id] == 0 and prev_health > 0:
-                    self.death_tracker_enemy[enemy_id] = 1
-                    delta_deaths += self.reward_death_value
-                    delta_enemy += prev_health
-            else:
-                if self.death_tracker_enemy[enemy_id] == 0:
-                    cur_health = unit.health + unit.shield
-                    delta_enemy += max(prev_health - cur_health, 0.0)
-
-            if unit is not None:
-                self.prev_enemy_health[enemy_id] = unit.health
-                self.prev_enemy_shield[enemy_id] = unit.shield
-            else:
-                self.prev_enemy_health[enemy_id] = 0.0
-                self.prev_enemy_shield[enemy_id] = 0.0
-
-        if self.reward_only_positive:
-            reward = self._variant_logic.reward_positive_transform(
-                delta_enemy + delta_deaths
-            )
-        else:
-            reward = delta_enemy + delta_deaths - delta_ally
-        return float(reward)
-
     def _battle_outcome_code(self):
         n_ally_alive = sum(1 for unit in self.agents.values() if unit.health > 0)
         n_enemy_alive = sum(1 for unit in self.enemies.values() if unit.health > 0)
@@ -590,115 +422,6 @@ class NativeStarCraft2Env:
     def _is_healer(self, unit) -> bool:
         medivac_id = self._unit_ids.medivac_id
         return medivac_id > 0 and unit.unit_type == medivac_id
-
-    def _build_agent_action(self, agent_id: int, action: int):
-        avail = self.get_avail_agent_actions(agent_id)
-        if action < 0 or action >= self.n_actions or avail[action] == 0:
-            return None
-        unit = self.agents.get(agent_id)
-        if unit is None or unit.health <= 0:
-            return None
-
-        tag = unit.tag
-        x = unit.pos.x
-        y = unit.pos.y
-        cmd = None
-        if action == 0:
-            return None
-        if action == 1:
-            cmd = r_pb.ActionRawUnitCommand(
-                ability_id=ACTIONS["stop"],
-                unit_tags=[tag],
-                queue_command=False,
-            )
-        elif action == 2:
-            cmd = self._build_move_cmd(tag, x, y + self._move_amount)
-        elif action == 3:
-            cmd = self._build_move_cmd(tag, x, y - self._move_amount)
-        elif action == 4:
-            cmd = self._build_move_cmd(tag, x + self._move_amount, y)
-        elif action == 5:
-            cmd = self._build_move_cmd(tag, x - self._move_amount, y)
-        else:
-            slot = action - self.n_actions_no_attack
-            targets = self._attack_targets_for_unit(unit)
-            if slot >= len(targets):
-                return None
-            target = targets[slot]
-            ability_id = ACTIONS["heal"] if self._is_healer(unit) else ACTIONS["attack"]
-            cmd = r_pb.ActionRawUnitCommand(
-                ability_id=ability_id,
-                target_unit_tag=target.tag,
-                unit_tags=[tag],
-                queue_command=False,
-            )
-
-        return sc_pb.Action(action_raw=r_pb.ActionRaw(unit_command=cmd))
-
-    def _build_move_cmd(self, tag: int, x: float, y: float):
-        return r_pb.ActionRawUnitCommand(
-            ability_id=ACTIONS["move"],
-            target_world_space_pos=sc_common.Point2D(x=x, y=y),
-            unit_tags=[tag],
-            queue_command=False,
-        )
-
-    def _build_opponent_actions(self, actions: Sequence[int]) -> Sequence[Any]:
-        runtime = self._opponent_runtime
-        if (
-            runtime is None
-            or self.switches.opponent_mode != "scripted_pool"
-            or self._session.num_agents < 2
-        ):
-            return []
-
-        payload = {
-            "agents": self.enemies,
-            "enemies": self.agents,
-            "agent_ability": self._query_enemy_abilities(),
-            "visible_matrix": self._fog_visibility_matrix(),
-            "episode_step": self._episode_steps,
-        }
-        context = OpponentStepContext(
-            family=self.variant,
-            episode_step=self._episode_steps,
-            actions=list(actions),
-            terminated=False,
-            info={},
-            payload=payload,
-        )
-        if hasattr(runtime, "compute_actions"):
-            try:
-                return runtime.compute_actions(context)
-            except Exception:
-                return []
-        return []
-
-    def _query_enemy_abilities(self):
-        env = self._session.env
-        controllers = getattr(env, "_controllers", None) if env is not None else None
-        if not controllers or len(controllers) < 2:
-            return []
-        try:
-            query = q_pb.RequestQuery()
-            for unit in self.enemies.values():
-                ability = query.abilities.add()
-                ability.unit_tag = unit.tag
-            if len(query.abilities) == 0:
-                return []
-            result = controllers[1].query(query)
-            return list(result.abilities)
-        except Exception:
-            return []
-
-    def _fog_visibility_matrix(self):
-        red_visible = [
-            unit.tag for unit in self.enemies.values() if unit.health > 0
-        ]
-        blue_visible = [
-            unit.tag for unit in self.agents.values() if unit.health > 0
-        ]
-        return {"red": red_visible, "blue": blue_visible}
 
     def _unit_shoot_range(self, unit) -> float:
         ids = self._variant_logic.shoot_range_by_type(self._unit_ids)

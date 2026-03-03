@@ -29,7 +29,19 @@ from .env_factory import (
     build_default_backend_registry,
     make_env,
 )
-from .native import NativeStarCraft2Env, SC2EnvRawSession, SC2SessionConfig
+from .native import (
+    DefaultNativeActionBuilder,
+    DefaultNativeObservationBuilder,
+    DefaultNativeRewardBuilder,
+    DefaultNativeStateBuilder,
+    NativeActionBuilder,
+    NativeObservationBuilder,
+    NativeRewardBuilder,
+    NativeStarCraft2Env,
+    NativeStateBuilder,
+    SC2EnvRawSession,
+    SC2SessionConfig,
+)
 from .opponents import (
     EngineBotOpponentRuntime,
     HardScriptCompatibilityWrapper,
@@ -45,6 +57,10 @@ from .types import StepBatch
 __all__ = [
     "BackendConfig",
     "BuildContext",
+    "DefaultNativeActionBuilder",
+    "DefaultNativeObservationBuilder",
+    "DefaultNativeRewardBuilder",
+    "DefaultNativeStateBuilder",
     "DefaultObservationBuilder",
     "DefaultRewardBuilder",
     "DefaultStateBuilder",
@@ -54,6 +70,10 @@ __all__ = [
     "CapabilityMode",
     "HardScriptCompatibilityWrapper",
     "NativeStarCraft2Env",
+    "NativeActionBuilder",
+    "NativeObservationBuilder",
+    "NativeRewardBuilder",
+    "NativeStateBuilder",
     "OpponentMode",
     "NormalizedEnvAdapter",
     "ObservationBuilder",
