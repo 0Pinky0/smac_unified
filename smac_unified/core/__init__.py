@@ -1,8 +1,8 @@
 """Shared runtime helpers for normalized SMAC-family implementations."""
 
-from .session_sc2env import SC2EnvRawSession, SC2SessionConfig
+from .sc2session import SC2EnvRawSession, SC2SessionConfig
 from .unit_tracker import UnitTracker, UnitValueSnapshot
-from .unified_env import NativeStarCraft2Env
+from .smac_env import SMACEnv
 from .variants import (
     SmacHardVariantLogic,
     SmacV2VariantLogic,
@@ -13,7 +13,7 @@ from .variants import (
 )
 
 __all__ = [
-    'NativeStarCraft2Env',
+    'SMACEnv',
     'SC2EnvRawSession',
     'SC2SessionConfig',
     'SmacHardVariantLogic',

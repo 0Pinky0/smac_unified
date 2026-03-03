@@ -20,12 +20,12 @@ from ..handlers import (
 )
 from ..maps import MapParams, get_map_params
 from ..players import OpponentEpisodeContext, OpponentRuntime
-from .session_sc2env import SC2EnvRawSession, SC2SessionConfig
+from .sc2session import SC2EnvRawSession, SC2SessionConfig
 from .unit_tracker import UnitTracker
 from .variants import UnitTypeIds, VariantLogic, build_variant_logic
 
 
-class NativeStarCraft2Env:
+class SMACEnv:
     """Standalone native unified SMAC-family environment.
 
     This native implementation is intentionally modular and conservative:

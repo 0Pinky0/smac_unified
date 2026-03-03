@@ -34,7 +34,7 @@ from .env_factory import (
     make_env,
 )
 from .core import (
-    NativeStarCraft2Env,
+    SMACEnv,
     SC2EnvRawSession,
     SC2SessionConfig,
 )
@@ -63,7 +63,7 @@ __all__ = [
     'ActionMode',
     'CapabilityMode',
     'HardScriptCompatibilityWrapper',
-    'NativeStarCraft2Env',
+    'SMACEnv',
     'ObservationHandler',
     'OpponentMode',
     'NormalizedEnvAdapter',

@@ -35,7 +35,7 @@ class NativeUnifiedBackend:
             return False
 
     def make_env(self, config: BackendConfig):
-        from ..core import NativeStarCraft2Env
+        from ..core import SMACEnv
 
         env_kwargs = dict(config.env_kwargs)
         if config.logic_switches is not None:
@@ -51,7 +51,7 @@ class NativeUnifiedBackend:
             if value is not None:
                 env_kwargs[dst_key] = value
 
-        return NativeStarCraft2Env(
+        return SMACEnv(
             variant=config.family,
             map_name=config.map_name,
             capability_config=config.capability_config,
