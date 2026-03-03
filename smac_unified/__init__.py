@@ -11,6 +11,17 @@ from .builders import (
     RewardContext,
     StateBuilder,
 )
+from .config import (
+    ActionMode,
+    CapabilityMode,
+    OpponentMode,
+    RewardPositiveMode,
+    TeamInitMode,
+    VariantName,
+    VariantSwitches,
+    default_switches,
+    merge_switches,
+)
 from .env_factory import (
     BackendConfig,
     EnvFactoryConfig,
@@ -18,6 +29,7 @@ from .env_factory import (
     build_default_backend_registry,
     make_env,
 )
+from .native import NativeStarCraft2Env, SC2EnvRawSession, SC2SessionConfig
 from .opponents import (
     EngineBotOpponentRuntime,
     HardScriptCompatibilityWrapper,
@@ -38,7 +50,11 @@ __all__ = [
     "DefaultStateBuilder",
     "EngineBotOpponentRuntime",
     "EnvFactoryConfig",
+    "ActionMode",
+    "CapabilityMode",
     "HardScriptCompatibilityWrapper",
+    "NativeStarCraft2Env",
+    "OpponentMode",
     "NormalizedEnvAdapter",
     "ObservationBuilder",
     "OpponentEpisodeContext",
@@ -46,12 +62,20 @@ __all__ = [
     "OpponentRuntime",
     "OpponentStepContext",
     "RewardBuilder",
+    "RewardPositiveMode",
     "RewardContext",
+    "SC2EnvRawSession",
+    "SC2SessionConfig",
     "ScriptedOpponentConfig",
     "ScriptedOpponentRuntime",
     "StateBuilder",
+    "TeamInitMode",
     "StepBatch",
     "UnifiedFactory",
+    "VariantName",
+    "VariantSwitches",
     "build_default_backend_registry",
+    "default_switches",
     "make_env",
+    "merge_switches",
 ]

@@ -20,6 +20,7 @@ class OpponentStepContext:
     actions: Sequence[int]
     terminated: bool = False
     info: Mapping[str, Any] = field(default_factory=dict)
+    payload: Mapping[str, Any] = field(default_factory=dict)
 
 
 class OpponentRuntime(ABC):
@@ -36,6 +37,10 @@ class OpponentRuntime(ABC):
 
     def after_step(self, context: OpponentStepContext) -> None:
         del context
+
+    def compute_actions(self, context: OpponentStepContext):
+        del context
+        return []
 
     def close(self) -> None:
         return None

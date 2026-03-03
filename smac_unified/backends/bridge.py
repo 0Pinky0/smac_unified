@@ -72,6 +72,12 @@ def _import_symbol(
 
 class SmacBridgeBackend:
     family = "smac"
+    kind = "bridge"
+    priority = 100
+
+    def is_available(self, config: BackendConfig) -> bool:
+        del config
+        return True
 
     def make_env(self, config: BackendConfig):
         constructor = _import_symbol(
@@ -86,6 +92,12 @@ class SmacBridgeBackend:
 
 class SmacV2BridgeBackend:
     family = "smacv2"
+    kind = "bridge"
+    priority = 100
+
+    def is_available(self, config: BackendConfig) -> bool:
+        del config
+        return True
 
     def make_env(self, config: BackendConfig):
         kwargs = dict(config.env_kwargs)
@@ -109,6 +121,12 @@ class SmacV2BridgeBackend:
 
 class SmacHardBridgeBackend:
     family = "smac-hard"
+    kind = "bridge"
+    priority = 100
+
+    def is_available(self, config: BackendConfig) -> bool:
+        del config
+        return True
 
     def make_env(self, config: BackendConfig):
         constructor = _import_symbol(

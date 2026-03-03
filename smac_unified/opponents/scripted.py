@@ -5,7 +5,8 @@ import random
 from dataclasses import dataclass
 from typing import Any, Dict, List, Mapping, Sequence
 
-from .base import OpponentEpisodeContext, OpponentRuntime
+from .base import OpponentEpisodeContext, OpponentRuntime, OpponentStepContext
+from .policies import default_script_pool
 
 
 @dataclass
@@ -76,6 +77,7 @@ class ScriptedOpponentRuntime(OpponentRuntime):
         self._env = None
         self._family = ""
         self._last_script_name = ""
+        self._active_script: HardScriptCompatibilityWrapper | None = None
 
     @property
     def last_script_name(self) -> str:
@@ -90,11 +92,14 @@ class ScriptedOpponentRuntime(OpponentRuntime):
             return
         script_pool = self._resolve_script_pool(context.map_name)
         if not script_pool:
+            self._active_script = None
             return
         selected = self._select_script(script_pool)
         script_instance = self._instantiate_script(selected, context.map_name)
         wrapped = HardScriptCompatibilityWrapper(script_instance)
-        self._env.dts_script = wrapped
+        self._active_script = wrapped
+        if hasattr(self._env, "dts_script"):
+            self._env.dts_script = wrapped
         self._last_script_name = type(script_instance).__name__
 
     def _resolve_script_pool(self, map_name: str) -> List[Any]:
@@ -102,9 +107,12 @@ class ScriptedOpponentRuntime(OpponentRuntime):
             return list(self._script_dict.get(map_name, []))
         try:
             from smac_hard.env.scripts import SCRIPT_DICT
+            resolved = list(SCRIPT_DICT.get(map_name, []))
+            if resolved:
+                return resolved
         except Exception:
-            return []
-        return list(SCRIPT_DICT.get(map_name, []))
+            pass
+        return list(default_script_pool(map_name))
 
     def _select_script(self, pool: Sequence[Any]):
         if self._config.strategy == "fixed":
@@ -120,6 +128,26 @@ class ScriptedOpponentRuntime(OpponentRuntime):
             return script_class_or_obj(map_name)
         except TypeError:
             return script_class_or_obj()
+
+    def compute_actions(self, context: OpponentStepContext):
+        if self._active_script is None:
+            return []
+        payload = dict(context.payload or {})
+        agents = payload.get("agents", {})
+        enemies = payload.get("enemies", {})
+        agent_ability = payload.get("agent_ability", [])
+        visible_matrix = payload.get("visible_matrix", {})
+        episode_step = payload.get("episode_step", context.episode_step)
+        try:
+            return self._active_script.script(
+                agents,
+                enemies,
+                agent_ability,
+                visible_matrix,
+                episode_step,
+            )
+        except Exception:
+            return []
 
 
 def build_scripted_runtime_from_config(

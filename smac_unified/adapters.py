@@ -47,6 +47,8 @@ class NormalizedEnvAdapter:
         self._reward_builder = reward_builder or DefaultRewardBuilder()
         self._opponent_runtime = opponent_runtime or EngineBotOpponentRuntime()
         self._opponent_runtime.bind_env(self._env, self.family)
+        if hasattr(self._env, "set_opponent_runtime"):
+            self._env.set_opponent_runtime(self._opponent_runtime)
 
     def reset(
         self,
@@ -99,14 +101,14 @@ class NormalizedEnvAdapter:
     def step(self, actions: Sequence[int]) -> StepBatch:
         before_ctx = OpponentStepContext(
             family=self.family,
-            episode_step=int(getattr(self._env, "_episode_steps", 0)),
+            episode_step=self._episode_step(),
             actions=list(actions),
         )
         self._opponent_runtime.before_step(before_ctx)
         reward, terminated, info = self._env.step(list(actions))
         after_ctx = OpponentStepContext(
             family=self.family,
-            episode_step=int(getattr(self._env, "_episode_steps", 0)),
+            episode_step=self._episode_step(),
             actions=list(actions),
             terminated=bool(terminated),
             info=dict(info),
@@ -139,14 +141,7 @@ class NormalizedEnvAdapter:
 
     def close(self) -> None:
         self._opponent_runtime.close()
-        if hasattr(self._env, "_sc2_procs") and self._env._sc2_procs is None:
-            # SMAC-Hard close() assumes iterable process holders.
-            self._env._sc2_procs = []
-        try:
-            self._env.close()
-        except TypeError:
-            # Keep adapter close idempotent across partially initialized envs.
-            return None
+        self._env.close()
 
     def get_env_info(self) -> dict:
         return self._env.get_env_info()
@@ -160,7 +155,7 @@ class NormalizedEnvAdapter:
         terminated: bool,
         info: Mapping[str, Any],
     ) -> StepBatch:
-        episode_step = int(getattr(self._env, "_episode_steps", 0))
+        episode_step = self._episode_step()
         build_ctx = BuildContext(
             family=self.family,
             env=self._env,
@@ -189,6 +184,11 @@ class NormalizedEnvAdapter:
             info=dict(info),
             episode_step=episode_step,
         )
+
+    def _episode_step(self) -> int:
+        if hasattr(self._env, "get_episode_step"):
+            return int(self._env.get_episode_step())
+        return int(getattr(self._env, "_episode_steps", 0))
 
     def __getattr__(self, name: str):
         return getattr(self._env, name)

@@ -7,21 +7,25 @@ from .adapters import NormalizedEnvAdapter
 from .backends import (
     BackendConfig,
     BackendRegistry,
+    NativeUnifiedBackend,
     SmacBridgeBackend,
     SmacHardBridgeBackend,
     SmacV2BridgeBackend,
 )
 from .builders import ObservationBuilder, RewardBuilder, StateBuilder
+from .config import VariantSwitches, default_switches
 from .opponents import (
     EngineBotOpponentRuntime,
     OpponentRuntime,
-    ScriptedOpponentRuntime,
     build_scripted_runtime_from_config,
 )
 
 
 def build_default_backend_registry() -> BackendRegistry:
     registry = BackendRegistry()
+    registry.register(NativeUnifiedBackend("smac"))
+    registry.register(NativeUnifiedBackend("smacv2"))
+    registry.register(NativeUnifiedBackend("smac-hard"))
     registry.register(SmacBridgeBackend())
     registry.register(SmacV2BridgeBackend())
     registry.register(SmacHardBridgeBackend())
@@ -39,7 +43,11 @@ class EnvFactoryConfig:
     # Preferred explicit env kwargs.
     env_kwargs: Dict[str, Any] = field(default_factory=dict)
     source_root: str | None = None
+    backend_mode: str = "native"
     backend_registry: BackendRegistry | None = None
+    logic_switches: Dict[str, str] = field(default_factory=dict)
+    native_options: Dict[str, Any] = field(default_factory=dict)
+    bridge_options: Dict[str, Any] = field(default_factory=dict)
     observation_builder: ObservationBuilder | None = None
     state_builder: StateBuilder | None = None
     reward_builder: RewardBuilder | None = None
@@ -54,9 +62,10 @@ class EnvFactoryConfig:
 
 def _default_opponent_runtime(
     family: str,
+    switches: VariantSwitches,
     opponent_config: Mapping[str, Any] | None,
 ) -> OpponentRuntime:
-    if family == "smac-hard":
+    if switches.opponent_mode == "scripted_pool" or family == "smac-hard":
         return build_scripted_runtime_from_config(opponent_config or {})
     return EngineBotOpponentRuntime()
 
@@ -68,7 +77,11 @@ def make_env(
     normalized_api: bool = True,
     capability_config: Optional[Dict[str, Any]] = None,
     source_root: str | None = None,
+    backend_mode: str = "native",
     backend_registry: BackendRegistry | None = None,
+    logic_switches: Mapping[str, str] | None = None,
+    native_options: Mapping[str, Any] | None = None,
+    bridge_options: Mapping[str, Any] | None = None,
     observation_builder: ObservationBuilder | None = None,
     state_builder: StateBuilder | None = None,
     reward_builder: RewardBuilder | None = None,
@@ -77,13 +90,39 @@ def make_env(
     **kwargs,
 ):
     registry = backend_registry or build_default_backend_registry()
-    backend = registry.get(family)
+    switches = default_switches(family)
+    if logic_switches:
+        switches = VariantSwitches(
+            variant=switches.variant,
+            action_mode=logic_switches.get("action_mode", switches.action_mode),
+            opponent_mode=logic_switches.get(
+                "opponent_mode", switches.opponent_mode
+            ),
+            capability_mode=logic_switches.get(
+                "capability_mode", switches.capability_mode
+            ),
+            reward_positive_mode=logic_switches.get(
+                "reward_positive_mode", switches.reward_positive_mode
+            ),
+            team_init_mode=logic_switches.get(
+                "team_init_mode", switches.team_init_mode
+            ),
+        )
     backend_config = BackendConfig(
         family=family,
         map_name=map_name,
         capability_config=capability_config,
         env_kwargs=dict(kwargs),
         source_root=source_root,
+        backend_mode=backend_mode,
+        native_options=dict(native_options or {}),
+        bridge_options=dict(bridge_options or {}),
+        logic_switches=switches,
+    )
+    backend = registry.get(
+        family,
+        mode=backend_mode,
+        config=backend_config,
     )
     env = backend.make_env(backend_config)
     if not normalized_api:
@@ -91,6 +130,7 @@ def make_env(
 
     runtime = opponent_runtime or _default_opponent_runtime(
         family,
+        switches,
         opponent_config,
     )
     return NormalizedEnvAdapter(
@@ -115,7 +155,11 @@ class UnifiedFactory:
             normalized_api=config.normalized_api,
             capability_config=config.capability_config,
             source_root=config.source_root,
+            backend_mode=config.backend_mode,
             backend_registry=config.backend_registry,
+            logic_switches=config.logic_switches,
+            native_options=config.native_options,
+            bridge_options=config.bridge_options,
             observation_builder=config.observation_builder,
             state_builder=config.state_builder,
             reward_builder=config.reward_builder,
