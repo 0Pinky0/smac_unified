@@ -7,15 +7,15 @@ import numpy as np
 
 from ..config import VariantSwitches, merge_switches
 from ..handlers import (
-    BuilderContext,
-    DefaultNativeActionBuilder,
-    DefaultNativeObservationBuilder,
-    DefaultNativeRewardBuilder,
-    DefaultNativeStateBuilder,
-    NativeActionBuilder,
-    NativeObservationBuilder,
-    NativeRewardBuilder,
-    NativeStateBuilder,
+    ActionHandler,
+    DefaultActionHandler,
+    DefaultObservationHandler,
+    DefaultRewardHandler,
+    DefaultStateHandler,
+    HandlerContext,
+    ObservationHandler,
+    RewardHandler,
+    StateHandler,
     UnitFrame,
 )
 from ..maps import MapParams, get_map_params
@@ -89,21 +89,21 @@ class NativeStarCraft2Env:
             self._env_kwargs.get("state_last_action", True)
         )
         self._seed = self._env_kwargs.get("seed")
-        self._action_builder: NativeActionBuilder = (
-            self._env_kwargs.get("native_action_builder")
-            or DefaultNativeActionBuilder()
+        self._action_handler: ActionHandler = (
+            self._env_kwargs.get("action_handler")
+            or DefaultActionHandler()
         )
-        self._observation_builder: NativeObservationBuilder = (
-            self._env_kwargs.get("native_observation_builder")
-            or DefaultNativeObservationBuilder()
+        self._observation_handler: ObservationHandler = (
+            self._env_kwargs.get("observation_handler")
+            or DefaultObservationHandler()
         )
-        self._state_builder: NativeStateBuilder = (
-            self._env_kwargs.get("native_state_builder")
-            or DefaultNativeStateBuilder()
+        self._state_handler: StateHandler = (
+            self._env_kwargs.get("state_handler")
+            or DefaultStateHandler()
         )
-        self._reward_builder: NativeRewardBuilder = (
-            self._env_kwargs.get("native_reward_builder")
-            or DefaultNativeRewardBuilder()
+        self._reward_handler: RewardHandler = (
+            self._env_kwargs.get("reward_handler")
+            or DefaultRewardHandler()
         )
 
         self._attack_slots = max(self.n_agents, self.n_enemies)
@@ -144,7 +144,7 @@ class NativeStarCraft2Env:
         self._action_eye = np.eye(self.n_actions, dtype=np.float32)
         self._unit_tracker = UnitTracker(self.n_agents, self.n_enemies)
         self._unit_frame: UnitFrame | None = None
-        self._builder_context: BuilderContext | None = None
+        self._handler_context: HandlerContext | None = None
 
     def _build_session(self) -> SC2EnvRawSession:
         cfg = SC2SessionConfig(
@@ -212,14 +212,14 @@ class NativeStarCraft2Env:
         self._sync_legacy_unit_views()
         self._init_unit_type_ids()
         self._init_max_reward()
-        self._refresh_builder_context()
-        self._action_builder.reset(
+        self._refresh_handler_context()
+        self._action_handler.reset(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
         )
-        self._reward_builder.reset(
+        self._reward_handler.reset(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
         )
 
         if (
@@ -243,26 +243,26 @@ class NativeStarCraft2Env:
             actions_int.extend([0] * (self.n_agents - len(actions_int)))
         actions_int = actions_int[: self.n_agents]
         self.last_action = self._action_eye[np.asarray(actions_int, dtype=np.int64)]
-        self._refresh_builder_context()
-        self._action_builder.reset(
+        self._refresh_handler_context()
+        self._action_handler.reset(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
         )
 
         ally_sc_actions: List[Any] = []
         for agent_id, action in enumerate(actions_int):
-            sc_action = self._action_builder.build_agent_action(
+            sc_action = self._action_handler.build_agent_action(
                 frame=self._unit_frame,
-                context=self._builder_context,
+                context=self._handler_context,
                 agent_id=agent_id,
                 action=action,
             )
             if sc_action is not None:
                 ally_sc_actions.append(sc_action)
 
-        opponent_actions = self._action_builder.build_opponent_actions(
+        opponent_actions = self._action_handler.build_opponent_actions(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
             actions=actions_int,
             runtime=self._opponent_runtime,
         )
@@ -285,12 +285,12 @@ class NativeStarCraft2Env:
             enemies=enemies,
         )
         self._sync_legacy_unit_views()
-        self._refresh_builder_context()
+        self._refresh_handler_context()
 
         terminated = bool(self._latest_timesteps[0].last())
-        reward = self._reward_builder.build_step_reward(
+        reward = self._reward_handler.build_step_reward(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
         )
         info = {"battle_won": False}
         battle_code = self._battle_outcome_code()
@@ -328,28 +328,28 @@ class NativeStarCraft2Env:
         return int(self._episode_steps)
 
     def get_obs(self):
-        if self._unit_frame is None or self._builder_context is None:
+        if self._unit_frame is None or self._handler_context is None:
             return []
-        return self._observation_builder.build_obs(
+        return self._observation_handler.build_obs(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
         )
 
     def get_obs_agent(self, agent_id: int):
-        if self._unit_frame is None or self._builder_context is None:
+        if self._unit_frame is None or self._handler_context is None:
             return np.zeros(self.get_obs_size(), dtype=np.float32)
-        return self._observation_builder.build_agent_obs(
+        return self._observation_handler.build_agent_obs(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
             agent_id=agent_id,
         )
 
     def get_state(self):
-        if self._unit_frame is None or self._builder_context is None:
+        if self._unit_frame is None or self._handler_context is None:
             return np.zeros(0, dtype=np.float32)
-        return self._state_builder.build_state(
+        return self._state_handler.build_state(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
         )
 
     def get_state_size(self):
@@ -365,11 +365,11 @@ class NativeStarCraft2Env:
         ]
 
     def get_avail_agent_actions(self, agent_id: int):
-        if self._unit_frame is None or self._builder_context is None:
+        if self._unit_frame is None or self._handler_context is None:
             return [1] + [0] * (self.n_actions - 1)
-        return self._action_builder.get_avail_agent_actions(
+        return self._action_handler.get_avail_agent_actions(
             frame=self._unit_frame,
-            context=self._builder_context,
+            context=self._handler_context,
             agent_id=agent_id,
         )
 
@@ -409,8 +409,8 @@ class NativeStarCraft2Env:
         except Exception:
             return
 
-    def _refresh_builder_context(self) -> None:
-        self._builder_context = BuilderContext(
+    def _refresh_handler_context(self) -> None:
+        self._handler_context = HandlerContext(
             family=self.variant,
             map_name=self.map_name,
             episode_step=self._episode_steps,

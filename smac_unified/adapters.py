@@ -4,16 +4,6 @@ from typing import Any, Mapping, Sequence
 
 import numpy as np
 
-from .handlers import (
-    BuildContext,
-    DefaultObservationBuilder,
-    DefaultRewardBuilder,
-    DefaultStateBuilder,
-    ObservationBuilder,
-    RewardBuilder,
-    RewardContext,
-    StateBuilder,
-)
 from .players import (
     EngineBotOpponentRuntime,
     OpponentEpisodeContext,
@@ -31,20 +21,12 @@ class NormalizedEnvAdapter:
         env: Any,
         family: str,
         *,
-        observation_builder: ObservationBuilder | None = None,
-        state_builder: StateBuilder | None = None,
-        reward_builder: RewardBuilder | None = None,
         opponent_runtime: OpponentRuntime | None = None,
         opponent_config: Mapping[str, Any] | None = None,
     ):
         self._env = env
         self.family = family
         self._opponent_config = dict(opponent_config or {})
-        self._observation_builder = (
-            observation_builder or DefaultObservationBuilder()
-        )
-        self._state_builder = state_builder or DefaultStateBuilder()
-        self._reward_builder = reward_builder or DefaultRewardBuilder()
         self._opponent_runtime = opponent_runtime or EngineBotOpponentRuntime()
         self._opponent_runtime.bind_env(self._env, self.family)
         if hasattr(self._env, "set_opponent_runtime"):
@@ -80,10 +62,10 @@ class NormalizedEnvAdapter:
                 reset_result = self._env.reset()
 
         if isinstance(reset_result, tuple) and len(reset_result) >= 2:
-            raw_obs, raw_state = reset_result[0], reset_result[1]
+            obs, state = reset_result[0], reset_result[1]
         else:
-            raw_obs = self._env.get_obs()
-            raw_state = self._env.get_state()
+            obs = self._env.get_obs()
+            state = self._env.get_state()
 
         episode_context = OpponentEpisodeContext(
             family=self.family,
@@ -93,9 +75,9 @@ class NormalizedEnvAdapter:
         )
         self._opponent_runtime.on_reset(episode_context)
         return self._collect_batch(
-            raw_obs=raw_obs,
-            raw_state=raw_state,
-            raw_reward=0.0,
+            obs=obs,
+            state=state,
+            reward=0.0,
             terminated=False,
             info={},
         )
@@ -117,9 +99,9 @@ class NormalizedEnvAdapter:
         )
         self._opponent_runtime.after_step(after_ctx)
         return self._collect_batch(
-            raw_obs=self._env.get_obs(),
-            raw_state=self._env.get_state(),
-            raw_reward=reward,
+            obs=self._env.get_obs(),
+            state=self._env.get_state(),
+            reward=reward,
             terminated=terminated,
             info=info,
         )
@@ -151,37 +133,21 @@ class NormalizedEnvAdapter:
     def _collect_batch(
         self,
         *,
-        raw_obs,
-        raw_state,
-        raw_reward: float,
+        obs,
+        state,
+        reward: float,
         terminated: bool,
         info: Mapping[str, Any],
     ) -> StepBatch:
         episode_step = self._episode_step()
-        build_ctx = BuildContext(
-            family=self.family,
-            env=self._env,
-            episode_step=episode_step,
-        )
-        reward_ctx = RewardContext(
-            family=self.family,
-            env=self._env,
-            episode_step=episode_step,
-            terminated=bool(terminated),
-            info=dict(info),
-        )
-        obs = self._observation_builder.build(raw_obs=raw_obs, context=build_ctx)
-        state = self._state_builder.build(raw_state=raw_state, context=build_ctx)
-        reward = self._reward_builder.build(
-            raw_reward=float(raw_reward),
-            context=reward_ctx,
-        )
+        obs_array = np.asarray(obs, dtype=np.float32)
+        state_array = np.asarray(state, dtype=np.float32)
         avail_actions = np.asarray(self._env.get_avail_actions(), dtype=np.int8)
         return StepBatch.from_components(
-            obs=obs,
-            state=state,
+            obs=obs_array,
+            state=state_array,
             avail_actions=avail_actions,
-            reward=reward,
+            reward=float(reward),
             terminated=terminated,
             info=dict(info),
             episode_step=episode_step,

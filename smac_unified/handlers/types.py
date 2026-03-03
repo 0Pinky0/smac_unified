@@ -1,25 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Mapping
+from typing import Any
 
 import numpy as np
-
-
-@dataclass
-class BuildContext:
-    family: str
-    env: Any
-    episode_step: int = 0
-
-
-@dataclass
-class RewardContext:
-    family: str
-    env: Any
-    episode_step: int
-    terminated: bool
-    info: Mapping[str, Any]
 
 
 @dataclass(frozen=True)
@@ -70,7 +54,7 @@ class UnitFrame:
 
 
 @dataclass
-class BuilderContext:
+class HandlerContext:
     family: str
     map_name: str
     episode_step: int

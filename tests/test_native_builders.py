@@ -5,11 +5,11 @@ from types import SimpleNamespace
 import numpy as np
 
 from smac_unified.handlers import (
-    BuilderContext,
-    DefaultNativeActionBuilder,
-    DefaultNativeObservationBuilder,
-    DefaultNativeRewardBuilder,
-    DefaultNativeStateBuilder,
+    DefaultActionHandler,
+    DefaultObservationHandler,
+    DefaultRewardHandler,
+    DefaultStateHandler,
+    HandlerContext,
     TrackedUnit,
     UnitFrame,
     UnitTeamFrame,
@@ -90,7 +90,7 @@ def _context(
     max_reward: float = 0.0,
     reward_scale_rate: float = 20.0,
 ):
-    return BuilderContext(
+    return HandlerContext(
         family="smac",
         map_name="3m",
         episode_step=1,
@@ -120,7 +120,7 @@ def _context(
     )
 
 
-def test_native_action_builder_avail_masks_are_deterministic():
+def test_action_handler_avail_masks_are_deterministic():
     frame = UnitFrame(
         allies=_team_frame(
             [_tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=45)]
@@ -142,16 +142,16 @@ def test_native_action_builder_avail_masks_are_deterministic():
         n_actions_no_attack=6,
         attack_slots=1,
     )
-    builder = DefaultNativeActionBuilder()
-    mask_a = builder.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
-    mask_b = builder.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
+    handler = DefaultActionHandler()
+    mask_a = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
+    mask_b = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
 
     assert mask_a == mask_b
     assert mask_a[1] == 1
     assert mask_a[6] == 1
 
 
-def test_native_reward_builder_uses_frame_deltas_and_scaling():
+def test_reward_handler_uses_frame_deltas_and_scaling():
     frame = UnitFrame(
         allies=_team_frame(
             [_tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=40)]
@@ -186,17 +186,17 @@ def test_native_reward_builder_uses_frame_deltas_and_scaling():
         reward_scale_rate=20.0,
     )
 
-    reward_builder = DefaultNativeRewardBuilder()
-    reward_builder.reset(frame=frame, context=unscaled_ctx)
-    unscaled = reward_builder.build_step_reward(frame=frame, context=unscaled_ctx)
-    reward_builder.reset(frame=frame, context=scaled_ctx)
-    scaled = reward_builder.build_step_reward(frame=frame, context=scaled_ctx)
+    reward_handler = DefaultRewardHandler()
+    reward_handler.reset(frame=frame, context=unscaled_ctx)
+    unscaled = reward_handler.build_step_reward(frame=frame, context=unscaled_ctx)
+    reward_handler.reset(frame=frame, context=scaled_ctx)
+    scaled = reward_handler.build_step_reward(frame=frame, context=scaled_ctx)
 
     assert np.isclose(unscaled, 5.0)
     assert np.isclose(scaled, 1.0)
 
 
-def test_native_observation_and_state_builders_follow_unified_contract():
+def test_observation_and_state_handlers_follow_unified_contract():
     frame = UnitFrame(
         allies=_team_frame(
             [
@@ -228,13 +228,13 @@ def test_native_observation_and_state_builders_follow_unified_contract():
         attack_slots=2,
     )
 
-    obs_builder = DefaultNativeObservationBuilder()
-    state_builder = DefaultNativeStateBuilder()
-    action_builder = DefaultNativeActionBuilder()
+    obs_handler = DefaultObservationHandler()
+    state_handler = DefaultStateHandler()
+    action_handler = DefaultActionHandler()
 
-    obs = obs_builder.build_obs(frame=frame, context=context)
-    state = state_builder.build_state(frame=frame, context=context)
-    stop_cmd = action_builder.build_agent_action(
+    obs = obs_handler.build_obs(frame=frame, context=context)
+    state = state_handler.build_state(frame=frame, context=context)
+    stop_cmd = action_handler.build_agent_action(
         frame=frame,
         context=context,
         agent_id=0,

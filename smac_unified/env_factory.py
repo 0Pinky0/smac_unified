@@ -47,10 +47,10 @@ class EnvFactoryConfig:
     logic_switches: Dict[str, str] = field(default_factory=dict)
     native_options: Dict[str, Any] = field(default_factory=dict)
     bridge_options: Dict[str, Any] = field(default_factory=dict)
-    observation_builder: Any | None = None
-    state_builder: Any | None = None
-    reward_builder: Any | None = None
-    action_builder: Any | None = None
+    observation_handler: Any | None = None
+    state_handler: Any | None = None
+    reward_handler: Any | None = None
+    action_handler: Any | None = None
     opponent_runtime: OpponentRuntime | None = None
     opponent_config: Dict[str, Any] = field(default_factory=dict)
 
@@ -82,10 +82,10 @@ def make_env(
     logic_switches: Mapping[str, str] | None = None,
     native_options: Mapping[str, Any] | None = None,
     bridge_options: Mapping[str, Any] | None = None,
-    observation_builder: Any | None = None,
-    state_builder: Any | None = None,
-    reward_builder: Any | None = None,
-    action_builder: Any | None = None,
+    observation_handler: Any | None = None,
+    state_handler: Any | None = None,
+    reward_handler: Any | None = None,
+    action_handler: Any | None = None,
     opponent_runtime: OpponentRuntime | None = None,
     opponent_config: Mapping[str, Any] | None = None,
     **kwargs,
@@ -109,15 +109,15 @@ def make_env(
                 "team_init_mode", switches.team_init_mode
             ),
         )
-    builder_overrides: Dict[str, Any] = {}
-    if action_builder is not None:
-        builder_overrides["action_builder"] = action_builder
-    if _has_callable_attr(observation_builder, "build_agent_obs"):
-        builder_overrides["observation_builder"] = observation_builder
-    if _has_callable_attr(state_builder, "build_state"):
-        builder_overrides["state_builder"] = state_builder
-    if _has_callable_attr(reward_builder, "build_step_reward"):
-        builder_overrides["reward_builder"] = reward_builder
+    handler_overrides: Dict[str, Any] = {}
+    if action_handler is not None:
+        handler_overrides["action_handler"] = action_handler
+    if _has_callable_attr(observation_handler, "build_agent_obs"):
+        handler_overrides["observation_handler"] = observation_handler
+    if _has_callable_attr(state_handler, "build_state"):
+        handler_overrides["state_handler"] = state_handler
+    if _has_callable_attr(reward_handler, "build_step_reward"):
+        handler_overrides["reward_handler"] = reward_handler
 
     backend_config = BackendConfig(
         family=family,
@@ -129,7 +129,7 @@ def make_env(
         native_options=dict(native_options or {}),
         bridge_options=dict(bridge_options or {}),
         logic_switches=switches,
-        builder_overrides=builder_overrides,
+        handler_overrides=handler_overrides,
     )
     backend = registry.get(
         family,
@@ -145,23 +145,9 @@ def make_env(
         switches,
         opponent_config,
     )
-    adapter_observation_builder = (
-        observation_builder
-        if _has_callable_attr(observation_builder, "build")
-        else None
-    )
-    adapter_state_builder = (
-        state_builder if _has_callable_attr(state_builder, "build") else None
-    )
-    adapter_reward_builder = (
-        reward_builder if _has_callable_attr(reward_builder, "build") else None
-    )
     return NormalizedEnvAdapter(
         env,
         family=family,
-        observation_builder=adapter_observation_builder,
-        state_builder=adapter_state_builder,
-        reward_builder=adapter_reward_builder,
         opponent_runtime=runtime,
         opponent_config=opponent_config,
     )
@@ -183,10 +169,10 @@ class UnifiedFactory:
             logic_switches=config.logic_switches,
             native_options=config.native_options,
             bridge_options=config.bridge_options,
-            observation_builder=config.observation_builder,
-            state_builder=config.state_builder,
-            reward_builder=config.reward_builder,
-            action_builder=config.action_builder,
+            observation_handler=config.observation_handler,
+            state_handler=config.state_handler,
+            reward_handler=config.reward_handler,
+            action_handler=config.action_handler,
             opponent_runtime=config.opponent_runtime,
             opponent_config=config.opponent_config,
             **config.resolved_env_kwargs(),

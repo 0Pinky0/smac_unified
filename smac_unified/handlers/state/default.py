@@ -1,30 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
-
 import numpy as np
 
-from ..types import BuildContext, BuilderContext, UnitFrame
-from .base import NativeStateBuilder, StateBuilder
+from ..types import HandlerContext, UnitFrame
+from .base import StateHandler
 
 
-class DefaultStateBuilder(StateBuilder):
-    def build(
-        self,
-        *,
-        raw_state: Sequence[Any],
-        context: BuildContext,
-    ) -> np.ndarray:
-        del context
-        return np.asarray(raw_state, dtype=np.float32)
-
-
-class DefaultNativeStateBuilder(NativeStateBuilder):
+class DefaultStateHandler(StateHandler):
     def build_state(
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ):
         ally_state = np.zeros((context.n_agents, 5), dtype=np.float32)
         for unit in frame.allies.units:

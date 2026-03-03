@@ -1,11 +1,7 @@
-from .base import FrameRewardBuilder, NativeRewardBuilder, RewardBuilder
-from .default import DefaultNativeRewardBuilder, DefaultRewardBuilder, builder_bundle
+from .base import RewardHandler
+from .default import DefaultRewardHandler
 
 __all__ = [
-    "DefaultNativeRewardBuilder",
-    "DefaultRewardBuilder",
-    "FrameRewardBuilder",
-    "NativeRewardBuilder",
-    "RewardBuilder",
-    "builder_bundle",
+    "DefaultRewardHandler",
+    "RewardHandler",
 ]

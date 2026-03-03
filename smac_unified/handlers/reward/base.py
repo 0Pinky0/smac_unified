@@ -2,30 +2,17 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 
-from ..types import BuilderContext, RewardContext, UnitFrame
+from ..types import HandlerContext, UnitFrame
 
 
-class RewardBuilder(ABC):
-    """Builds normalized scalar reward from raw backend output."""
-
-    @abstractmethod
-    def build(
-        self,
-        *,
-        raw_reward: float,
-        context: RewardContext,
-    ) -> float:
-        raise NotImplementedError
-
-
-class FrameRewardBuilder(ABC):
+class RewardHandler(ABC):
     """Builds step rewards from tracked unit frames."""
 
     def reset(
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> None:
         del frame, context
 
@@ -34,10 +21,6 @@ class FrameRewardBuilder(ABC):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> float:
         raise NotImplementedError
-
-
-class NativeRewardBuilder(FrameRewardBuilder):
-    """Compatibility alias for previous native-only reward handler naming."""

@@ -1,30 +1,17 @@
 from __future__ import annotations
 
-from typing import Any, Sequence
-
 import numpy as np
 
-from ..types import BuildContext, BuilderContext, UnitFrame
-from .base import NativeObservationBuilder, ObservationBuilder
+from ..types import HandlerContext, UnitFrame
+from .base import ObservationHandler
 
 
-class DefaultObservationBuilder(ObservationBuilder):
-    def build(
-        self,
-        *,
-        raw_obs: Sequence[Any],
-        context: BuildContext,
-    ) -> np.ndarray:
-        del context
-        return np.asarray(raw_obs, dtype=np.float32)
-
-
-class DefaultNativeObservationBuilder(NativeObservationBuilder):
+class DefaultObservationHandler(ObservationHandler):
     def build_agent_obs(
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         agent_id: int,
     ):
         unit = frame.allies.units[agent_id]
@@ -97,7 +84,7 @@ class DefaultNativeObservationBuilder(NativeObservationBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ):
         return [
             self.build_agent_obs(
@@ -117,7 +104,7 @@ def _unit_sight_range(
     *,
     agent_id: int,
     frame: UnitFrame,
-    context: BuilderContext,
+    context: HandlerContext,
 ) -> float:
     unit = frame.allies.units[agent_id]
     ids = context.variant_logic.shoot_range_by_type(context.unit_type_ids)
@@ -128,5 +115,5 @@ def _unit_sight_range(
     return max(shoot_range + 3.0, 6.0)
 
 
-def _obs_vector_size(context: BuilderContext) -> int:
+def _obs_vector_size(context: HandlerContext) -> int:
     return 4 + context.attack_slots * 6 + max(context.n_agents - 1, 1) * 6 + 4

@@ -1,37 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, Mapping
-
 import numpy as np
 
-from ..types import BuilderContext, RewardContext, UnitFrame
-from .base import NativeRewardBuilder, RewardBuilder
+from ..types import HandlerContext, UnitFrame
+from .base import RewardHandler
 
 
-class DefaultRewardBuilder(RewardBuilder):
-    def __init__(self, scale_from_env: bool = False):
-        self.scale_from_env = scale_from_env
-
-    def build(
-        self,
-        *,
-        raw_reward: float,
-        context: RewardContext,
-    ) -> float:
-        reward = float(raw_reward)
-        if not self.scale_from_env:
-            return reward
-
-        max_reward = float(getattr(context.env, "max_reward", 0.0) or 0.0)
-        scale_rate = float(
-            getattr(context.env, "reward_scale_rate", 0.0) or 0.0
-        )
-        if max_reward <= 0.0 or scale_rate <= 0.0:
-            return reward
-        return reward / (max_reward / scale_rate)
-
-
-class DefaultNativeRewardBuilder(NativeRewardBuilder):
+class DefaultRewardHandler(RewardHandler):
     def __init__(self):
         self._death_tracker_ally: np.ndarray | None = None
         self._death_tracker_enemy: np.ndarray | None = None
@@ -40,7 +15,7 @@ class DefaultNativeRewardBuilder(NativeRewardBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> None:
         del context
         n_agents = len(frame.allies.units)
@@ -52,7 +27,7 @@ class DefaultNativeRewardBuilder(NativeRewardBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> float:
         if context.reward_sparse:
             return 0.0
@@ -101,19 +76,3 @@ class DefaultNativeRewardBuilder(NativeRewardBuilder):
         if context.reward_scale and context.max_reward > 0 and context.reward_scale_rate > 0:
             reward /= context.max_reward / context.reward_scale_rate
         return float(reward)
-
-
-def builder_bundle(
-    *,
-    observation_builder: Any | None = None,
-    state_builder: Any | None = None,
-    reward_builder: Any | None = None,
-) -> Mapping[str, Any]:
-    from ..obs.default import DefaultObservationBuilder
-    from ..state.default import DefaultStateBuilder
-
-    return {
-        "observation_builder": observation_builder or DefaultObservationBuilder(),
-        "state_builder": state_builder or DefaultStateBuilder(),
-        "reward_builder": reward_builder or DefaultRewardBuilder(),
-    }

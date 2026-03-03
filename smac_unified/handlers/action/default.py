@@ -9,8 +9,8 @@ from s2clientprotocol import raw_pb2 as r_pb
 from s2clientprotocol import sc2api_pb2 as sc_pb
 
 from ...players import OpponentStepContext
-from ..types import BuilderContext, TrackedUnit, UnitFrame
-from .base import NativeActionBuilder
+from ..types import HandlerContext, TrackedUnit, UnitFrame
+from .base import ActionHandler
 
 _ACTIONS = {
     "move": 16,
@@ -20,7 +20,7 @@ _ACTIONS = {
 }
 
 
-class DefaultNativeActionBuilder(NativeActionBuilder):
+class DefaultActionHandler(ActionHandler):
     def __init__(self):
         self._avail_actions_cache: dict[int, list[int]] = {}
         self._cache_step_token = -1
@@ -29,7 +29,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> None:
         del frame, context
         self._avail_actions_cache.clear()
@@ -39,7 +39,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         agent_id: int,
     ) -> list[int]:
         if self._cache_step_token != frame.step_token:
@@ -88,7 +88,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         agent_id: int,
         action: int,
     ) -> sc_pb.Action | None:
@@ -147,7 +147,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         actions: Sequence[int],
         runtime: Any | None,
     ) -> Sequence[Any]:
@@ -224,7 +224,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
     def _can_move(
         unit: TrackedUnit,
         *,
-        context: BuilderContext,
+        context: HandlerContext,
         dx: float,
         dy: float,
     ) -> bool:
@@ -233,7 +233,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         return 0 <= nx <= context.map_x and 0 <= ny <= context.map_y
 
     @staticmethod
-    def _is_healer(unit: TrackedUnit, *, context: BuilderContext) -> bool:
+    def _is_healer(unit: TrackedUnit, *, context: HandlerContext) -> bool:
         medivac_id = getattr(context.unit_type_ids, "medivac_id", 0)
         return medivac_id > 0 and unit.unit_type == medivac_id
 
@@ -242,7 +242,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         *,
         unit: TrackedUnit,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> list[TrackedUnit]:
         if self._is_healer(unit, context=context):
             medivac_id = getattr(context.unit_type_ids, "medivac_id", 0)
@@ -256,7 +256,7 @@ class DefaultNativeActionBuilder(NativeActionBuilder):
         return targets[: context.attack_slots]
 
     @staticmethod
-    def _unit_shoot_range(*, unit_type: int, context: BuilderContext) -> float:
+    def _unit_shoot_range(*, unit_type: int, context: HandlerContext) -> float:
         ids = context.variant_logic.shoot_range_by_type(context.unit_type_ids)
         default_range = 6.0
         if unit_type in ids and ids[unit_type] > 0:

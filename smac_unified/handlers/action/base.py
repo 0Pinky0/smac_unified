@@ -3,17 +3,17 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Any, Sequence
 
-from ..types import BuilderContext, UnitFrame
+from ..types import HandlerContext, UnitFrame
 
 
-class ActionBuilder(ABC):
+class ActionHandler(ABC):
     """Unified action handler contract for native and bridge runtimes."""
 
     def reset(
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
     ) -> None:
         del frame, context
 
@@ -22,7 +22,7 @@ class ActionBuilder(ABC):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         agent_id: int,
     ) -> list[int]:
         raise NotImplementedError
@@ -32,7 +32,7 @@ class ActionBuilder(ABC):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         agent_id: int,
         action: int,
     ) -> Any | None:
@@ -42,13 +42,9 @@ class ActionBuilder(ABC):
         self,
         *,
         frame: UnitFrame,
-        context: BuilderContext,
+        context: HandlerContext,
         actions: Sequence[int],
         runtime: Any | None,
     ) -> Sequence[Any]:
         del frame, context, actions, runtime
         return []
-
-
-class NativeActionBuilder(ActionBuilder):
-    """Compatibility alias for previous native-only action handler naming."""

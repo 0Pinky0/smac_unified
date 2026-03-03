@@ -82,22 +82,22 @@ Native backend starts with conservative defaults:
 
 Pass `native_options={...}` for expert overrides.
 
-## Unified Builder Model
+## Unified Handler Model
 
 Native runtime now follows a tracker-centered data flow:
 - `UnitTracker` emits stable `UnitFrame` snapshots each step.
-- Native `Action/Observation/State/Reward` builders consume `UnitFrame + BuilderContext`.
+- `Action/Observation/State/Reward` handlers consume `UnitFrame + HandlerContext`.
 - `NativeStarCraft2Env` focuses on session/lifecycle/orchestration.
 
-Builder overrides use one shared factory surface:
+Handler overrides use one shared factory surface:
 
 ```python
 from smac_unified import make_env
 from smac_unified.handlers import (
-    DefaultNativeActionBuilder,
-    DefaultNativeObservationBuilder,
-    DefaultNativeStateBuilder,
-    DefaultNativeRewardBuilder,
+    DefaultActionHandler,
+    DefaultObservationHandler,
+    DefaultStateHandler,
+    DefaultRewardHandler,
 )
 
 env = make_env(
@@ -105,14 +105,14 @@ env = make_env(
     map_name="3m",
     backend_mode="native",
     normalized_api=False,
-    action_builder=DefaultNativeActionBuilder(),
-    observation_builder=DefaultNativeObservationBuilder(),
-    state_builder=DefaultNativeStateBuilder(),
-    reward_builder=DefaultNativeRewardBuilder(),
+    action_handler=DefaultActionHandler(),
+    observation_handler=DefaultObservationHandler(),
+    state_handler=DefaultStateHandler(),
+    reward_handler=DefaultRewardHandler(),
 )
 ```
 
-Reward scaling ownership is centralized in the native reward builder path.
+Reward scaling ownership is centralized in the reward handler path.
 
 ### Scripted Opponents (`smac-hard`)
 

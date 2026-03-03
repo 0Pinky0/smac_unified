@@ -1,8 +1,7 @@
-from .base import ActionBuilder, NativeActionBuilder
-from .default import DefaultNativeActionBuilder
+from .base import ActionHandler
+from .default import DefaultActionHandler
 
 __all__ = [
-    "ActionBuilder",
-    "DefaultNativeActionBuilder",
-    "NativeActionBuilder",
+    "ActionHandler",
+    "DefaultActionHandler",
 ]

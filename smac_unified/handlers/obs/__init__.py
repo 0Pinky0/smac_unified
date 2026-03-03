@@ -1,10 +1,7 @@
-from .base import FrameObservationBuilder, NativeObservationBuilder, ObservationBuilder
-from .default import DefaultNativeObservationBuilder, DefaultObservationBuilder
+from .base import ObservationHandler
+from .default import DefaultObservationHandler
 
 __all__ = [
-    "DefaultNativeObservationBuilder",
-    "DefaultObservationBuilder",
-    "FrameObservationBuilder",
-    "NativeObservationBuilder",
-    "ObservationBuilder",
+    "DefaultObservationHandler",
+    "ObservationHandler",
 ]
