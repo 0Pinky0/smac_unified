@@ -8,6 +8,7 @@ import numpy as np
 
 from ..config import VariantSwitches, merge_switches
 from ..builders import (
+    BuilderContext,
     DefaultNativeActionBuilder,
     DefaultNativeObservationBuilder,
     DefaultNativeRewardBuilder,
@@ -16,9 +17,11 @@ from ..builders import (
     NativeObservationBuilder,
     NativeRewardBuilder,
     NativeStateBuilder,
+    UnitFrame,
 )
 from ..maps import MapParams, get_map_params
 from ..opponents import OpponentEpisodeContext, OpponentRuntime
+from ..core import UnitTracker
 from .session_sc2env import SC2EnvRawSession, SC2SessionConfig
 from .variants import UnitTypeIds, VariantLogic, build_variant_logic
 
@@ -139,6 +142,9 @@ class NativeStarCraft2Env:
         self.reward = 0.0
         self.last_action = np.zeros((self.n_agents, self.n_actions), dtype=np.float32)
         self._action_eye = np.eye(self.n_actions, dtype=np.float32)
+        self._unit_tracker = UnitTracker(self.n_agents, self.n_enemies)
+        self._unit_frame: UnitFrame | None = None
+        self._builder_context: BuilderContext | None = None
 
     def _build_session(self) -> SC2EnvRawSession:
         cfg = SC2SessionConfig(
@@ -186,7 +192,6 @@ class NativeStarCraft2Env:
         self._episode_steps = 0
         self.reward = 0.0
         self.last_action.fill(0.0)
-        self._action_builder.reset(self)
 
         self._latest_timesteps = self._session.reset()
         self._obs = self._latest_timesteps[0].observation
@@ -199,7 +204,19 @@ class NativeStarCraft2Env:
         self._rebuild_units()
         self._init_unit_type_ids()
         self._init_max_reward()
-        self._reward_builder.reset(self)
+        self._unit_frame = self._unit_tracker.reset(
+            allies=list(self.agents.values()),
+            enemies=list(self.enemies.values()),
+        )
+        self._refresh_builder_context()
+        self._action_builder.reset(
+            frame=self._unit_frame,
+            context=self._builder_context,
+        )
+        self._reward_builder.reset(
+            frame=self._unit_frame,
+            context=self._builder_context,
+        )
 
         if self._opponent_runtime is not None:
             self._opponent_runtime.on_reset(
@@ -219,22 +236,28 @@ class NativeStarCraft2Env:
             actions_int.extend([0] * (self.n_agents - len(actions_int)))
         actions_int = actions_int[: self.n_agents]
         self.last_action = self._action_eye[np.asarray(actions_int, dtype=np.int64)]
-        self._action_builder.reset(self)
+        self._refresh_builder_context()
+        self._action_builder.reset(
+            frame=self._unit_frame,
+            context=self._builder_context,
+        )
 
         ally_sc_actions: List[Any] = []
         for agent_id, action in enumerate(actions_int):
             sc_action = self._action_builder.build_agent_action(
-                self,
-                agent_id,
-                action,
+                frame=self._unit_frame,
+                context=self._builder_context,
+                agent_id=agent_id,
+                action=action,
             )
             if sc_action is not None:
                 ally_sc_actions.append(sc_action)
 
         opponent_actions = self._action_builder.build_opponent_actions(
-            self,
-            actions_int,
-            self._opponent_runtime,
+            frame=self._unit_frame,
+            context=self._builder_context,
+            actions=actions_int,
+            runtime=self._opponent_runtime,
         )
         self._latest_timesteps = self._session.step(
             agent_actions=ally_sc_actions,
@@ -250,9 +273,17 @@ class NativeStarCraft2Env:
         self._total_steps += 1
         self._episode_steps += 1
         self._rebuild_units()
+        self._unit_frame = self._unit_tracker.update(
+            allies=list(self.agents.values()),
+            enemies=list(self.enemies.values()),
+        )
+        self._refresh_builder_context()
 
         terminated = bool(self._latest_timesteps[0].last())
-        reward = self._reward_builder.build_step_reward(self)
+        reward = self._reward_builder.build_step_reward(
+            frame=self._unit_frame,
+            context=self._builder_context,
+        )
         info = {"battle_won": False}
         battle_code = self._battle_outcome_code()
         if battle_code is not None:
@@ -287,13 +318,29 @@ class NativeStarCraft2Env:
         return int(self._episode_steps)
 
     def get_obs(self):
-        return self._observation_builder.build_obs(self)
+        if self._unit_frame is None or self._builder_context is None:
+            return []
+        return self._observation_builder.build_obs(
+            frame=self._unit_frame,
+            context=self._builder_context,
+        )
 
     def get_obs_agent(self, agent_id: int):
-        return self._observation_builder.build_agent_obs(self, agent_id)
+        if self._unit_frame is None or self._builder_context is None:
+            return np.zeros(self.get_obs_size(), dtype=np.float32)
+        return self._observation_builder.build_agent_obs(
+            frame=self._unit_frame,
+            context=self._builder_context,
+            agent_id=agent_id,
+        )
 
     def get_state(self):
-        return self._state_builder.build_state(self)
+        if self._unit_frame is None or self._builder_context is None:
+            return np.zeros(0, dtype=np.float32)
+        return self._state_builder.build_state(
+            frame=self._unit_frame,
+            context=self._builder_context,
+        )
 
     def get_state_size(self):
         return int(self.get_state().shape[0])
@@ -308,7 +355,13 @@ class NativeStarCraft2Env:
         ]
 
     def get_avail_agent_actions(self, agent_id: int):
-        return self._action_builder.get_avail_agent_actions(self, agent_id)
+        if self._unit_frame is None or self._builder_context is None:
+            return [1] + [0] * (self.n_actions - 1)
+        return self._action_builder.get_avail_agent_actions(
+            frame=self._unit_frame,
+            context=self._builder_context,
+            agent_id=agent_id,
+        )
 
     def get_env_info(self):
         return {
@@ -345,6 +398,33 @@ class NativeStarCraft2Env:
             self.max_distance_y = self.map_y
         except Exception:
             return
+
+    def _refresh_builder_context(self) -> None:
+        self._builder_context = BuilderContext(
+            family=self.variant,
+            map_name=self.map_name,
+            episode_step=self._episode_steps,
+            n_agents=self.n_agents,
+            n_enemies=self.n_enemies,
+            n_actions=self.n_actions,
+            n_actions_no_attack=self.n_actions_no_attack,
+            attack_slots=self._attack_slots,
+            move_amount=self._move_amount,
+            map_x=self.map_x,
+            map_y=self.map_y,
+            max_distance_x=self.max_distance_x,
+            max_distance_y=self.max_distance_y,
+            state_last_action=self.state_last_action,
+            last_action=self.last_action,
+            reward_sparse=self.reward_sparse,
+            reward_only_positive=self.reward_only_positive,
+            reward_death_value=self.reward_death_value,
+            reward_negative_scale=self.reward_negative_scale,
+            variant_logic=self._variant_logic,
+            unit_type_ids=self._unit_ids,
+            switches=self.switches,
+            env=self,
+        )
 
     def _rebuild_units(self) -> None:
         if self._obs is None:

@@ -63,6 +63,12 @@ class RewardBuilder(ABC):
 
 
 @dataclass(frozen=True)
+class UnitPosition:
+    x: float
+    y: float
+
+
+@dataclass(frozen=True)
 class TrackedUnit:
     unit_id: int
     tag: int
@@ -75,6 +81,12 @@ class TrackedUnit:
     shield_max: float
     weapon_cooldown: float
     alive: bool
+    owner: int = 0
+    raw: Any | None = None
+
+    @property
+    def pos(self) -> UnitPosition:
+        return UnitPosition(x=self.x, y=self.y)
 
 
 @dataclass(frozen=True)
@@ -121,6 +133,7 @@ class BuilderContext:
     variant_logic: Any
     unit_type_ids: Any
     switches: Any
+    env: Any | None = None
 
 
 class ActionBuilder(ABC):
