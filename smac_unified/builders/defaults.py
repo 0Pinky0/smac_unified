@@ -790,6 +790,8 @@ class DefaultNativeRewardBuilder(NativeRewardBuilder):
             )
         else:
             reward = delta_enemy + delta_deaths - delta_ally
+        if context.reward_scale and context.max_reward > 0 and context.reward_scale_rate > 0:
+            reward /= context.max_reward / context.reward_scale_rate
         return float(reward)
 
     @staticmethod

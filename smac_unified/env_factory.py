@@ -12,7 +12,6 @@ from .backends import (
     SmacHardBridgeBackend,
     SmacV2BridgeBackend,
 )
-from .builders import ObservationBuilder, RewardBuilder, StateBuilder
 from .config import VariantSwitches, default_switches
 from .opponents import (
     EngineBotOpponentRuntime,
@@ -48,9 +47,10 @@ class EnvFactoryConfig:
     logic_switches: Dict[str, str] = field(default_factory=dict)
     native_options: Dict[str, Any] = field(default_factory=dict)
     bridge_options: Dict[str, Any] = field(default_factory=dict)
-    observation_builder: ObservationBuilder | None = None
-    state_builder: StateBuilder | None = None
-    reward_builder: RewardBuilder | None = None
+    observation_builder: Any | None = None
+    state_builder: Any | None = None
+    reward_builder: Any | None = None
+    action_builder: Any | None = None
     opponent_runtime: OpponentRuntime | None = None
     opponent_config: Dict[str, Any] = field(default_factory=dict)
 
@@ -82,9 +82,10 @@ def make_env(
     logic_switches: Mapping[str, str] | None = None,
     native_options: Mapping[str, Any] | None = None,
     bridge_options: Mapping[str, Any] | None = None,
-    observation_builder: ObservationBuilder | None = None,
-    state_builder: StateBuilder | None = None,
-    reward_builder: RewardBuilder | None = None,
+    observation_builder: Any | None = None,
+    state_builder: Any | None = None,
+    reward_builder: Any | None = None,
+    action_builder: Any | None = None,
     opponent_runtime: OpponentRuntime | None = None,
     opponent_config: Mapping[str, Any] | None = None,
     **kwargs,
@@ -108,6 +109,16 @@ def make_env(
                 "team_init_mode", switches.team_init_mode
             ),
         )
+    builder_overrides: Dict[str, Any] = {}
+    if action_builder is not None:
+        builder_overrides["action_builder"] = action_builder
+    if _has_callable_attr(observation_builder, "build_agent_obs"):
+        builder_overrides["observation_builder"] = observation_builder
+    if _has_callable_attr(state_builder, "build_state"):
+        builder_overrides["state_builder"] = state_builder
+    if _has_callable_attr(reward_builder, "build_step_reward"):
+        builder_overrides["reward_builder"] = reward_builder
+
     backend_config = BackendConfig(
         family=family,
         map_name=map_name,
@@ -118,6 +129,7 @@ def make_env(
         native_options=dict(native_options or {}),
         bridge_options=dict(bridge_options or {}),
         logic_switches=switches,
+        builder_overrides=builder_overrides,
     )
     backend = registry.get(
         family,
@@ -133,12 +145,23 @@ def make_env(
         switches,
         opponent_config,
     )
+    adapter_observation_builder = (
+        observation_builder
+        if _has_callable_attr(observation_builder, "build")
+        else None
+    )
+    adapter_state_builder = (
+        state_builder if _has_callable_attr(state_builder, "build") else None
+    )
+    adapter_reward_builder = (
+        reward_builder if _has_callable_attr(reward_builder, "build") else None
+    )
     return NormalizedEnvAdapter(
         env,
         family=family,
-        observation_builder=observation_builder,
-        state_builder=state_builder,
-        reward_builder=reward_builder,
+        observation_builder=adapter_observation_builder,
+        state_builder=adapter_state_builder,
+        reward_builder=adapter_reward_builder,
         opponent_runtime=runtime,
         opponent_config=opponent_config,
     )
@@ -163,7 +186,12 @@ class UnifiedFactory:
             observation_builder=config.observation_builder,
             state_builder=config.state_builder,
             reward_builder=config.reward_builder,
+            action_builder=config.action_builder,
             opponent_runtime=config.opponent_runtime,
             opponent_config=config.opponent_config,
             **config.resolved_env_kwargs(),
         )
+
+
+def _has_callable_attr(value: Any, name: str) -> bool:
+    return value is not None and callable(getattr(value, name, None))

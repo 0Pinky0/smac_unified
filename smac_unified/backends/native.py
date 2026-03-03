@@ -40,6 +40,16 @@ class NativeUnifiedBackend:
         env_kwargs = dict(config.env_kwargs)
         if config.logic_switches is not None:
             env_kwargs.setdefault("logic_switches", config.logic_switches)
+        builder_map = {
+            "action_builder": "native_action_builder",
+            "observation_builder": "native_observation_builder",
+            "state_builder": "native_state_builder",
+            "reward_builder": "native_reward_builder",
+        }
+        for src_key, dst_key in builder_map.items():
+            value = config.builder_overrides.get(src_key)
+            if value is not None:
+                env_kwargs[dst_key] = value
 
         return NativeStarCraft2Env(
             variant=config.family,

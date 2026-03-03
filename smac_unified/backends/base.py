@@ -15,6 +15,7 @@ class BackendConfig:
     native_options: Dict[str, Any] = field(default_factory=dict)
     bridge_options: Dict[str, Any] = field(default_factory=dict)
     logic_switches: Any | None = None
+    builder_overrides: Dict[str, Any] = field(default_factory=dict)
 
 
 @runtime_checkable

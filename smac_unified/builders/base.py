@@ -130,6 +130,9 @@ class BuilderContext:
     reward_only_positive: bool
     reward_death_value: float
     reward_negative_scale: float
+    reward_scale: bool
+    reward_scale_rate: float
+    max_reward: float
     variant_logic: Any
     unit_type_ids: Any
     switches: Any

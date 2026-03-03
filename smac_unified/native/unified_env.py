@@ -304,9 +304,6 @@ class NativeStarCraft2Env:
             terminated = True
             info["episode_limit"] = True
 
-        if self.reward_scale and self.max_reward > 0 and self.reward_scale_rate > 0:
-            reward /= self.max_reward / self.reward_scale_rate
-
         if terminated:
             self._episode_count += 1
         self.reward = float(reward)
@@ -421,6 +418,9 @@ class NativeStarCraft2Env:
             reward_only_positive=self.reward_only_positive,
             reward_death_value=self.reward_death_value,
             reward_negative_scale=self.reward_negative_scale,
+            reward_scale=self.reward_scale,
+            reward_scale_rate=self.reward_scale_rate,
+            max_reward=self.max_reward,
             variant_logic=self._variant_logic,
             unit_type_ids=self._unit_ids,
             switches=self.switches,
