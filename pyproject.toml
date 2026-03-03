@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "smac-unified"
+version = "0.1.0"
+description = "Standalone modular unified API for SMAC-family environments."
+readme = "implementation/smac_unified/README.md"
+requires-python = ">=3.9"
+dependencies = [
+  "numpy>=1.21",
+]
+
+[project.optional-dependencies]
+legacy-backends = []
+
+[tool.setuptools.packages.find]
+include = ["smac_unified*"]
