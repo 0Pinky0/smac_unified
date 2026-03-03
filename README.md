@@ -82,6 +82,38 @@ Native backend starts with conservative defaults:
 
 Pass `native_options={...}` for expert overrides.
 
+## Unified Builder Model
+
+Native runtime now follows a tracker-centered data flow:
+- `UnitTracker` emits stable `UnitFrame` snapshots each step.
+- Native `Action/Observation/State/Reward` builders consume `UnitFrame + BuilderContext`.
+- `NativeStarCraft2Env` focuses on session/lifecycle/orchestration.
+
+Builder overrides use one shared factory surface:
+
+```python
+from smac_unified import make_env
+from smac_unified.builders import (
+    DefaultNativeActionBuilder,
+    DefaultNativeObservationBuilder,
+    DefaultNativeStateBuilder,
+    DefaultNativeRewardBuilder,
+)
+
+env = make_env(
+    family="smac",
+    map_name="3m",
+    backend_mode="native",
+    normalized_api=False,
+    action_builder=DefaultNativeActionBuilder(),
+    observation_builder=DefaultNativeObservationBuilder(),
+    state_builder=DefaultNativeStateBuilder(),
+    reward_builder=DefaultNativeRewardBuilder(),
+)
+```
+
+Reward scaling ownership is centralized in the native reward builder path.
+
 ### Scripted Opponents (`smac-hard`)
 
 Scripted runtime is integrated through the common opponent interface. For safety, native mode defaults to single-controller bot opposition and leaves dual-controller scripted stepping disabled unless explicitly enabled:

@@ -5,9 +5,9 @@
       "map_name": "3m",
       "backend_mode": "native",
       "ok": true,
-      "elapsed_s": 5.818124166000416,
+      "elapsed_s": 6.358913972999289,
       "steps": 3,
-      "sps": 0.5156301093626033,
+      "sps": 0.47177867364432974,
       "error": ""
     },
     {
@@ -15,9 +15,9 @@
       "map_name": "3m",
       "backend_mode": "bridge",
       "ok": true,
-      "elapsed_s": 5.0776422250000905,
+      "elapsed_s": 5.192465035001078,
       "steps": 3,
-      "sps": 0.590825400267335,
+      "sps": 0.577760269886801,
       "error": ""
     },
     {
@@ -25,9 +25,9 @@
       "map_name": "8m",
       "backend_mode": "native",
       "ok": true,
-      "elapsed_s": 5.831282379000186,
+      "elapsed_s": 5.8168498759987415,
       "steps": 3,
-      "sps": 0.5144665967135639,
+      "sps": 0.5157430678035001,
       "error": ""
     },
     {
@@ -35,9 +35,9 @@
       "map_name": "8m",
       "backend_mode": "bridge",
       "ok": true,
-      "elapsed_s": 5.145753082000738,
+      "elapsed_s": 5.240659656999924,
       "steps": 3,
-      "sps": 0.5830050436142498,
+      "sps": 0.5724470193352309,
       "error": ""
     },
     {
@@ -45,9 +45,9 @@
       "map_name": "3m",
       "backend_mode": "native",
       "ok": true,
-      "elapsed_s": 5.858887184000196,
+      "elapsed_s": 5.90816379700118,
       "steps": 3,
-      "sps": 0.5120426295615628,
+      "sps": 0.5077719750293174,
       "error": ""
     },
     {
@@ -55,33 +55,33 @@
       "map_name": "3m",
       "backend_mode": "bridge",
       "ok": true,
-      "elapsed_s": 9.436536779001472,
+      "elapsed_s": 9.618596050000633,
       "steps": 3,
-      "sps": 0.3179132419295721,
+      "sps": 0.3118958301611806,
       "error": ""
     }
   ],
   "summary": {
     "smac": {
       "native_ok": 1.0,
-      "native_sps": 0.5156301093626033,
+      "native_sps": 0.47177867364432974,
       "bridge_ok": 1.0,
-      "bridge_sps": 0.590825400267335,
-      "native_vs_bridge_delta_pct": -12.72715947396769
+      "bridge_sps": 0.577760269886801,
+      "native_vs_bridge_delta_pct": -18.34352442808778
     },
     "smac-hard": {
       "native_ok": 1.0,
-      "native_sps": 0.5120426295615628,
+      "native_sps": 0.5077719750293174,
       "bridge_ok": 1.0,
-      "bridge_sps": 0.3179132419295721,
-      "native_vs_bridge_delta_pct": 61.063636875810445
+      "bridge_sps": 0.3118958301611806,
+      "native_vs_bridge_delta_pct": 62.80178377726707
     },
     "smacv2": {
       "native_ok": 1.0,
-      "native_sps": 0.5144665967135639,
+      "native_sps": 0.5157430678035001,
       "bridge_ok": 1.0,
-      "bridge_sps": 0.5830050436142498,
-      "native_vs_bridge_delta_pct": -11.756064145824944
+      "bridge_sps": 0.5724470193352309,
+      "native_vs_bridge_delta_pct": -9.905537039494023
     }
   }
 }

@@ -2,14 +2,27 @@
 
 from .adapters import NormalizedEnvAdapter
 from .builders import (
+    ActionBuilder,
+    BuilderContext,
     BuildContext,
+    DefaultNativeActionBuilder,
+    DefaultNativeObservationBuilder,
+    DefaultNativeRewardBuilder,
+    DefaultNativeStateBuilder,
     DefaultObservationBuilder,
     DefaultRewardBuilder,
     DefaultStateBuilder,
+    NativeActionBuilder,
+    NativeObservationBuilder,
+    NativeRewardBuilder,
+    NativeStateBuilder,
     ObservationBuilder,
     RewardBuilder,
     RewardContext,
     StateBuilder,
+    TrackedUnit,
+    UnitFrame,
+    UnitTeamFrame,
 )
 from .config import (
     ActionMode,
@@ -30,15 +43,7 @@ from .env_factory import (
     make_env,
 )
 from .native import (
-    DefaultNativeActionBuilder,
-    DefaultNativeObservationBuilder,
-    DefaultNativeRewardBuilder,
-    DefaultNativeStateBuilder,
-    NativeActionBuilder,
-    NativeObservationBuilder,
-    NativeRewardBuilder,
     NativeStarCraft2Env,
-    NativeStateBuilder,
     SC2EnvRawSession,
     SC2SessionConfig,
 )
@@ -56,6 +61,8 @@ from .types import StepBatch
 
 __all__ = [
     "BackendConfig",
+    "ActionBuilder",
+    "BuilderContext",
     "BuildContext",
     "DefaultNativeActionBuilder",
     "DefaultNativeObservationBuilder",
@@ -91,6 +98,9 @@ __all__ = [
     "StateBuilder",
     "TeamInitMode",
     "StepBatch",
+    "TrackedUnit",
+    "UnitFrame",
+    "UnitTeamFrame",
     "UnifiedFactory",
     "VariantName",
     "VariantSwitches",
