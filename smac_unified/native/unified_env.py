@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from operator import attrgetter
 from typing import Any, Dict, List, Mapping, Sequence
 
@@ -201,13 +200,14 @@ class NativeStarCraft2Env:
             else None
         )
         self._sync_map_geometry()
-        self._rebuild_units()
+        allies, enemies = self._split_raw_units()
+        self._unit_frame = self._unit_tracker.reset(
+            allies=allies,
+            enemies=enemies,
+        )
+        self._sync_legacy_unit_views()
         self._init_unit_type_ids()
         self._init_max_reward()
-        self._unit_frame = self._unit_tracker.reset(
-            allies=list(self.agents.values()),
-            enemies=list(self.enemies.values()),
-        )
         self._refresh_builder_context()
         self._action_builder.reset(
             frame=self._unit_frame,
@@ -272,11 +272,12 @@ class NativeStarCraft2Env:
 
         self._total_steps += 1
         self._episode_steps += 1
-        self._rebuild_units()
+        allies, enemies = self._split_raw_units()
         self._unit_frame = self._unit_tracker.update(
-            allies=list(self.agents.values()),
-            enemies=list(self.enemies.values()),
+            allies=allies,
+            enemies=enemies,
         )
+        self._sync_legacy_unit_views()
         self._refresh_builder_context()
 
         terminated = bool(self._latest_timesteps[0].last())
@@ -426,12 +427,9 @@ class NativeStarCraft2Env:
             env=self,
         )
 
-    def _rebuild_units(self) -> None:
+    def _split_raw_units(self) -> tuple[list[Any], list[Any]]:
         if self._obs is None:
-            self.agents = {}
-            self.enemies = {}
-            return
-
+            return [], []
         raw_units = list(self._obs.observation.raw_data.units)
         allies = [u for u in raw_units if u.owner == 1]
         enemies = [u for u in raw_units if u.owner == 2]
@@ -440,32 +438,39 @@ class NativeStarCraft2Env:
             enemies,
             key=attrgetter("unit_type", "pos.x", "pos.y"),
         )
-        self.agents = {
-            idx: allies_sorted[idx]
-            for idx in range(min(self.n_agents, len(allies_sorted)))
-        }
-        self.enemies = {
-            idx: enemies_sorted[idx]
-            for idx in range(min(self.n_enemies, len(enemies_sorted)))
-        }
+        return allies_sorted, enemies_sorted
+
+    def _sync_legacy_unit_views(self) -> None:
+        self.agents = self._unit_tracker.raw_units_by_id(ally=True)
+        self.enemies = self._unit_tracker.raw_units_by_id(ally=False)
 
     def _init_unit_type_ids(self) -> None:
-        if not self.agents:
+        if self._unit_frame is None:
             return
-        min_unit_type = min(unit.unit_type for unit in self.agents.values())
+        ally_types = [
+            unit.unit_type
+            for unit in self._unit_frame.allies.units
+            if unit.unit_type > 0
+        ]
+        if not ally_types:
+            return
+        min_unit_type = min(ally_types)
         self._unit_ids = self._variant_logic.infer_unit_type_ids(min_unit_type)
 
     def _init_max_reward(self) -> None:
-        if self.max_reward > 0:
+        if self.max_reward > 0 or self._unit_frame is None:
             return
         self.max_reward = sum(
-            (unit.health_max + unit.shield_max) for unit in self.enemies.values()
+            (unit.health_max + unit.shield_max)
+            for unit in self._unit_frame.enemies.units
         )
         self.max_reward += self.reward_win
 
     def _battle_outcome_code(self):
-        n_ally_alive = sum(1 for unit in self.agents.values() if unit.health > 0)
-        n_enemy_alive = sum(1 for unit in self.enemies.values() if unit.health > 0)
+        if self._unit_frame is None:
+            return None
+        n_ally_alive = int(np.sum(self._unit_frame.allies.alive))
+        n_enemy_alive = int(np.sum(self._unit_frame.enemies.alive))
 
         if (n_ally_alive == 0 and n_enemy_alive > 0) or self._only_medivac_left(True):
             return -1
@@ -479,49 +484,16 @@ class NativeStarCraft2Env:
         medivac_id = self._unit_ids.medivac_id
         if self.map_params.map_type != "MMM" or medivac_id <= 0:
             return False
-        units = self.agents if ally else self.enemies
+        if self._unit_frame is None:
+            return False
+        units = (
+            self._unit_frame.allies.units
+            if ally
+            else self._unit_frame.enemies.units
+        )
         non_medivac_alive = [
             unit
-            for unit in units.values()
-            if unit.health > 0 and unit.unit_type != medivac_id
+            for unit in units
+            if unit.alive and unit.unit_type != medivac_id
         ]
         return len(non_medivac_alive) == 0
-
-    def _attack_targets_for_unit(self, unit) -> List[Any]:
-        is_healer = self._is_healer(unit)
-        if is_healer:
-            targets = [
-                ally
-                for ally in self.agents.values()
-                if ally.health > 0 and ally.unit_type != self._unit_ids.medivac_id
-            ]
-        else:
-            targets = [enemy for enemy in self.enemies.values() if enemy.health > 0]
-        return targets[: self._attack_slots]
-
-    def _is_healer(self, unit) -> bool:
-        medivac_id = self._unit_ids.medivac_id
-        return medivac_id > 0 and unit.unit_type == medivac_id
-
-    def _unit_shoot_range(self, unit) -> float:
-        ids = self._variant_logic.shoot_range_by_type(self._unit_ids)
-        unit_type = unit.unit_type
-        default_range = 6.0
-        if unit_type in ids and ids[unit_type] > 0:
-            return max(ids[unit_type], 0.1)
-        return default_range
-
-    def _unit_sight_range(self, agent_id: int) -> float:
-        unit = self.agents.get(agent_id)
-        if unit is None:
-            return 9.0
-        return max(self._unit_shoot_range(unit) + 3.0, 6.0)
-
-    def _can_move(self, unit, *, dx: float, dy: float) -> bool:
-        nx = unit.pos.x + dx
-        ny = unit.pos.y + dy
-        return 0 <= nx <= self.map_x and 0 <= ny <= self.map_y
-
-    @staticmethod
-    def _distance(x1, y1, x2, y2):
-        return math.hypot(x2 - x1, y2 - y1)
