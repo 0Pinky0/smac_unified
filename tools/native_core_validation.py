@@ -35,6 +35,14 @@ class CaseResult:
     elapsed_s: float
     steps: int
     sps: float
+    startup_s: float = 0.0
+    step_elapsed_s: float = 0.0
+    step_sps: float = 0.0
+    close_s: float = 0.0
+    warmup_steps: int = 0
+    steady_steps: int = 0
+    steady_elapsed_s: float = 0.0
+    steady_sps: float = 0.0
     error: str = ''
 
 
@@ -44,6 +52,7 @@ def _run_case(
     map_name: str,
     backend_mode: str,
     steps: int,
+    warmup_steps: int,
     make_env_fn,
 ) -> CaseResult:
     del make_env_fn
@@ -63,6 +72,8 @@ family = sys.argv[2]
 map_name = sys.argv[3]
 backend_mode = sys.argv[4]
 steps = int(sys.argv[5])
+warmup_steps = int(sys.argv[6])
+warmup_steps = max(0, min(warmup_steps, steps))
 
 t0 = time.perf_counter()
 env = make_env(
@@ -71,8 +82,13 @@ env = make_env(
     backend_mode=backend_mode,
     normalized_api=False,
 )
+t_make = time.perf_counter()
 env.reset()
-for _ in range(steps):
+t_reset = time.perf_counter()
+step_elapsed = 0.0
+steady_elapsed = 0.0
+steady_steps = 0
+for step_idx in range(steps):
     chosen = []
     for agent_id in range(env.n_agents):
         avail = list(env.get_avail_agent_actions(agent_id))
@@ -82,10 +98,39 @@ for _ in range(steps):
                 action = idx
                 break
         chosen.append(action)
+    t_step0 = time.perf_counter()
     env.step(chosen)
+    t_step1 = time.perf_counter()
+    dt = max(t_step1 - t_step0, 0.0)
+    step_elapsed += dt
+    if step_idx >= warmup_steps:
+        steady_elapsed += dt
+        steady_steps += 1
+t_close0 = time.perf_counter()
 env.close()
-elapsed = max(time.perf_counter() - t0, 1e-9)
-print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
+t_end = time.perf_counter()
+elapsed = max(t_end - t0, 1e-9)
+startup = max(t_reset - t0, 0.0)
+close_s = max(t_end - t_close0, 0.0)
+step_sps = steps / max(step_elapsed, 1e-9)
+steady_sps = (
+    steady_steps / max(steady_elapsed, 1e-9)
+    if steady_steps > 0
+    else 0.0
+)
+print(json.dumps({
+    "elapsed_s": elapsed,
+    "steps": steps,
+    "sps": steps / max(elapsed, 1e-9),
+    "startup_s": startup,
+    "step_elapsed_s": step_elapsed,
+    "step_sps": step_sps,
+    "close_s": close_s,
+    "warmup_steps": warmup_steps,
+    "steady_steps": steady_steps,
+    "steady_elapsed_s": steady_elapsed,
+    "steady_sps": steady_sps,
+}))
 """
     t0 = time.perf_counter()
     proc = subprocess.run(
@@ -98,6 +143,7 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
             map_name,
             backend_mode,
             str(steps),
+            str(warmup_steps),
         ],
         capture_output=True,
         text=True,
@@ -113,6 +159,7 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
             elapsed_s=elapsed_total,
             steps=steps,
             sps=0.0,
+            warmup_steps=warmup_steps,
             error=error.splitlines()[-1][:400],
         )
 
@@ -123,6 +170,7 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
             payload = json.loads(line)
             break
     elapsed = float(payload.get('elapsed_s', elapsed_total))
+    cold_sps = float(payload.get('sps', steps / max(elapsed, 1e-9)))
     return CaseResult(
         family=family,
         map_name=map_name,
@@ -130,7 +178,15 @@ print(json.dumps({"elapsed_s": elapsed, "steps": steps}))
         ok=True,
         elapsed_s=elapsed,
         steps=steps,
-        sps=steps / max(elapsed, 1e-9),
+        sps=cold_sps,
+        startup_s=float(payload.get('startup_s', 0.0)),
+        step_elapsed_s=float(payload.get('step_elapsed_s', 0.0)),
+        step_sps=float(payload.get('step_sps', 0.0)),
+        close_s=float(payload.get('close_s', 0.0)),
+        warmup_steps=int(payload.get('warmup_steps', warmup_steps)),
+        steady_steps=int(payload.get('steady_steps', max(steps - warmup_steps, 0))),
+        steady_elapsed_s=float(payload.get('steady_elapsed_s', 0.0)),
+        steady_sps=float(payload.get('steady_sps', 0.0)),
     )
 
 
@@ -144,12 +200,18 @@ def _summarize(results: List[CaseResult]) -> Dict[str, Dict[str, float]]:
         if native:
             payload['native_ok'] = float(native.ok)
             payload['native_sps'] = native.sps
+            payload['native_steady_sps'] = native.steady_sps
         if bridge:
             payload['bridge_ok'] = float(bridge.ok)
             payload['bridge_sps'] = bridge.sps
+            payload['bridge_steady_sps'] = bridge.steady_sps
         if native and bridge and bridge.sps > 0:
             payload['native_vs_bridge_delta_pct'] = (
                 (native.sps - bridge.sps) * 100.0 / bridge.sps
+            )
+        if native and bridge and bridge.steady_sps > 0:
+            payload['native_vs_bridge_steady_delta_pct'] = (
+                (native.steady_sps - bridge.steady_sps) * 100.0 / bridge.steady_sps
             )
         summary[family] = payload
     return summary
@@ -171,6 +233,12 @@ def main() -> int:
         choices=['smac', 'smacv2', 'smac-hard'],
     )
     parser.add_argument('--steps', type=int, default=5)
+    parser.add_argument(
+        '--warmup-steps',
+        type=int,
+        default=1,
+        help='Exclude first N steps from steady-state SPS.',
+    )
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
 
@@ -183,13 +251,16 @@ def main() -> int:
                 map_name=map_name,
                 backend_mode=backend_mode,
                 steps=args.steps,
+                warmup_steps=args.warmup_steps,
                 make_env_fn=make_env,
             )
             results.append(row)
             status = 'PASS' if row.ok else 'FAIL'
             print(
                 f'[{status}] family={family} mode={backend_mode} map={map_name} '
-                f'sps={row.sps:.3f} elapsed={row.elapsed_s:.3f}s error={row.error}'
+                f'cold_sps={row.sps:.3f} steady_sps={row.steady_sps:.3f} '
+                f'elapsed={row.elapsed_s:.3f}s startup={row.startup_s:.3f}s '
+                f'step={row.step_elapsed_s:.3f}s error={row.error}'
             )
 
     summary = _summarize(results)
