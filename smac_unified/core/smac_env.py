@@ -109,11 +109,32 @@ class SMACEnv:
         )
 
         self._attack_slots = max(self.n_agents, self.n_enemies)
-        self.n_actions = self._variant_logic.n_actions(
-            n_agents=self.n_agents,
-            n_enemies=self.n_enemies,
+        self._n_fov_actions = int(
+            self._env_kwargs.get('num_fov_actions', 12)
+            if self.switches.action_mode == 'conic_fov'
+            else 0
         )
-        self.n_actions_no_attack = 6
+        self._action_mask = bool(self._env_kwargs.get('action_mask', True))
+        self._use_ability = bool(
+            self._env_kwargs.get(
+                'use_ability',
+                self.switches.action_mode == 'ability_augmented',
+            )
+        )
+        self._ability_padding = max(self.n_agents, self.n_enemies, 9)
+        if self.switches.action_mode == 'conic_fov':
+            self.n_actions_no_attack = 6 + self._n_fov_actions
+            self.n_actions = self.n_actions_no_attack + self._attack_slots
+        elif self.switches.action_mode == 'ability_augmented':
+            self.n_actions_no_attack = 6
+            branches = 2 if self._use_ability else 1
+            self.n_actions = self.n_actions_no_attack + self._ability_padding * branches
+        else:
+            self.n_actions = self._variant_logic.n_actions(
+                n_agents=self.n_agents,
+                n_enemies=self.n_enemies,
+            )
+            self.n_actions_no_attack = 6
         self._obs_vector_size = (
             4
             + self._attack_slots * 6
@@ -144,6 +165,26 @@ class SMACEnv:
         self.reward = 0.0
         self.last_action = np.zeros((self.n_agents, self.n_actions), dtype=np.float32)
         self._action_eye = np.eye(self.n_actions, dtype=np.float32)
+        self.pathing_grid: np.ndarray | None = None
+        self.terrain_height: np.ndarray | None = None
+        self.fov_directions = np.zeros((self.n_agents, 2), dtype=np.float32)
+        self.fov_directions[:, 0] = 1.0
+        if self._n_fov_actions > 0:
+            angles = np.linspace(
+                0.0,
+                2.0 * np.pi,
+                num=self._n_fov_actions,
+                endpoint=False,
+                dtype=np.float32,
+            )
+            self.canonical_fov_directions = np.stack(
+                (np.cos(angles), np.sin(angles)),
+                axis=1,
+            ).astype(np.float32)
+            self._conic_fov_angle = float((2.0 * np.pi) / self._n_fov_actions)
+        else:
+            self.canonical_fov_directions = np.zeros((0, 2), dtype=np.float32)
+            self._conic_fov_angle = 0.0
         self._unit_tracker = UnitTracker(self.n_agents, self.n_enemies)
         self._unit_frame: UnitFrame | None = None
         self._handler_context: HandlerContext | None = None
@@ -197,6 +238,9 @@ class SMACEnv:
         self._episode_steps = 0
         self.reward = 0.0
         self.last_action.fill(0.0)
+        if self.fov_directions.shape[0] == self.n_agents:
+            self.fov_directions.fill(0.0)
+            self.fov_directions[:, 0] = 1.0
 
         self._latest_timesteps = self._session.reset()
         self._obs = self._latest_timesteps[0].observation
@@ -408,6 +452,16 @@ class SMACEnv:
             self.map_y = float(map_size.y)
             self.max_distance_x = self.map_x
             self.max_distance_y = self.map_y
+            self.pathing_grid = _decode_pathing_grid(
+                map_info=game_info.start_raw,
+                map_x=int(self.map_x),
+                map_y=int(self.map_y),
+            )
+            self.terrain_height = _decode_terrain_height(
+                map_info=game_info.start_raw,
+                map_x=int(self.map_x),
+                map_y=int(self.map_y),
+            )
         except Exception:
             return
 
@@ -439,6 +493,15 @@ class SMACEnv:
             unit_type_ids=self._unit_ids,
             switches=self.switches,
             env=self,
+            pathing_grid=self.pathing_grid,
+            terrain_height=self.terrain_height,
+            n_fov_actions=self._n_fov_actions,
+            conic_fov_angle=self._conic_fov_angle,
+            fov_directions=self.fov_directions,
+            canonical_fov_directions=self.canonical_fov_directions,
+            action_mask=self._action_mask,
+            ability_padding=self._ability_padding,
+            use_ability=self._use_ability,
         )
 
     def _split_raw_units(self) -> tuple[list[Any], list[Any]]:
@@ -511,3 +574,40 @@ class SMACEnv:
             if unit.alive and unit.unit_type != medivac_id
         ]
         return len(non_medivac_alive) == 0
+
+
+def _decode_pathing_grid(*, map_info: Any, map_x: int, map_y: int) -> np.ndarray | None:
+    pathing = getattr(map_info, 'pathing_grid', None)
+    if pathing is None:
+        return None
+    try:
+        if pathing.bits_per_pixel == 1:
+            vals = np.array(list(pathing.data), dtype=np.uint8).reshape(
+                map_x,
+                int(map_y / 8),
+            )
+            unpacked = np.array(
+                [[(byte >> bit) & 1 for byte in row for bit in range(7, -1, -1)] for row in vals],
+                dtype=bool,
+            )
+            return np.transpose(unpacked)
+        arr = np.array(list(pathing.data), dtype=bool).reshape(map_x, map_y)
+        return np.invert(np.flip(np.transpose(arr), axis=1))
+    except Exception:
+        return None
+
+
+def _decode_terrain_height(
+    *,
+    map_info: Any,
+    map_x: int,
+    map_y: int,
+) -> np.ndarray | None:
+    terrain = getattr(map_info, 'terrain_height', None)
+    if terrain is None:
+        return None
+    try:
+        arr = np.array(list(terrain.data), dtype=np.float32).reshape(map_x, map_y)
+        return np.flip(np.transpose(arr), axis=1) / 255.0
+    except Exception:
+        return None

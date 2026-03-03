@@ -81,3 +81,12 @@ class HandlerContext:
     unit_type_ids: Any
     switches: Any
     env: Any | None = None
+    pathing_grid: np.ndarray | None = None
+    terrain_height: np.ndarray | None = None
+    n_fov_actions: int = 0
+    conic_fov_angle: float = 0.0
+    fov_directions: np.ndarray | None = None
+    canonical_fov_directions: np.ndarray | None = None
+    action_mask: bool = True
+    ability_padding: int = 0
+    use_ability: bool = False

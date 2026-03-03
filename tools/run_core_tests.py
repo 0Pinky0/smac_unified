@@ -47,6 +47,18 @@ TEST_FUNCTIONS = [
         'tests.test_handler_factory',
         'test_factory_selects_ability_augmented_bundle_for_smac_hard',
     ),
+    (
+        'tests.test_action_parity',
+        'test_classic_action_handler_uses_pathing_grid_for_move_checks',
+    ),
+    (
+        'tests.test_action_parity',
+        'test_conic_handler_updates_fov_and_unmasks_targets',
+    ),
+    (
+        'tests.test_action_parity',
+        'test_ability_handler_enables_ability_branch_and_builds_command',
+    ),
 ]
 
 
