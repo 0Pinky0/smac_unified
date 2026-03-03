@@ -91,6 +91,22 @@ TEST_FUNCTIONS = [
         'tests.test_reset_capability_parity',
         'test_stochastic_attack_probability_can_block_attack_command',
     ),
+    (
+        'tests.test_api_parity',
+        'test_env_api_exposes_legacy_stats_and_metadata_fields',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_step_batch_matches_legacy_payload_contract',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_passes_for_matching_traces',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_reports_mismatch_details',
+    ),
 ]
 
 

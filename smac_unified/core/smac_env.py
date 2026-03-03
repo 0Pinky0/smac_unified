@@ -111,6 +111,18 @@ class SMACEnv:
         self.shield_bits_ally = 1 if self.map_params.a_race == 'P' else 0
         self.shield_bits_enemy = 1 if self.map_params.b_race == 'P' else 0
         self.unit_type_bits = int(self.map_params.unit_type_bits)
+        self.ally_state_attr_names = ['health', 'energy/cooldown', 'rel_x', 'rel_y']
+        self.enemy_state_attr_names = ['health', 'rel_x', 'rel_y']
+        if self.shield_bits_ally > 0:
+            self.ally_state_attr_names.append('shield')
+        if self.shield_bits_enemy > 0:
+            self.enemy_state_attr_names.append('shield')
+        if self.switches.action_mode == 'conic_fov':
+            self.ally_state_attr_names.extend(['fov_x', 'fov_y'])
+        if self.unit_type_bits > 0:
+            type_names = [f'type_{idx}' for idx in range(self.unit_type_bits)]
+            self.ally_state_attr_names.extend(type_names)
+            self.enemy_state_attr_names.extend(type_names)
         self._seed = self._env_kwargs.get('seed')
         self._rng = np.random.default_rng(self._seed)
         default_handlers = build_default_handler_bundle(
@@ -423,8 +435,22 @@ class SMACEnv:
             self._opponent_runtime.close()
         self._session.close()
 
+    def step_batch(self, actions: Sequence[int]) -> dict[str, Any]:
+        reward, terminated, info = self.step(actions)
+        return {
+            'obs': self.get_obs(),
+            'state': self.get_state(),
+            'avail_actions': self.get_avail_actions(),
+            'reward': reward,
+            'terminated': terminated,
+            'info': info,
+        }
+
     def get_episode_step(self) -> int:
         return int(self._episode_steps)
+
+    def get_total_actions(self) -> int:
+        return int(self.n_actions)
 
     def get_obs(self):
         if self._unit_frame is None or self._handler_context is None:
@@ -493,7 +519,24 @@ class SMACEnv:
                 self.switches.opponent_mode == 'scripted_pool'
                 and self._session.num_agents == 2
             ),
+            'agent_features': list(self.ally_state_attr_names),
+            'enemy_features': list(self.enemy_state_attr_names),
             'native_backend': True,
+        }
+
+    def get_stats(self) -> dict[str, float]:
+        win_rate = (
+            float(self.battles_won) / float(self.battles_game)
+            if self.battles_game > 0
+            else 0.0
+        )
+        return {
+            'battles_won': int(self.battles_won),
+            'battles_game': int(self.battles_game),
+            'battles_draw': int(self.timeouts),
+            'win_rate': float(win_rate),
+            'timeouts': int(self.timeouts),
+            'restarts': int(self.force_restarts),
         }
 
     def _estimate_obs_vector_size(self) -> int:

@@ -10,7 +10,7 @@ import sys
 import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Dict, List
+from typing import Any, Dict, List
 
 
 def _ensure_project_on_path() -> None:
@@ -44,6 +44,7 @@ class CaseResult:
     steady_steps: int = 0
     steady_elapsed_s: float = 0.0
     steady_sps: float = 0.0
+    trace: list[dict[str, Any]] | None = None
     error: str = ''
 
 
@@ -63,6 +64,8 @@ import json
 import sys
 import time
 from pathlib import Path
+
+import numpy as np
 
 root = Path(sys.argv[1]).resolve()
 if str(root) not in sys.path:
@@ -89,6 +92,7 @@ t_reset = time.perf_counter()
 step_elapsed = 0.0
 steady_elapsed = 0.0
 steady_steps = 0
+trace = []
 for step_idx in range(steps):
     chosen = []
     for agent_id in range(env.n_agents):
@@ -100,13 +104,34 @@ for step_idx in range(steps):
                 break
         chosen.append(action)
     t_step0 = time.perf_counter()
-    env.step(chosen)
+    reward, terminated, info = env.step(chosen)
     t_step1 = time.perf_counter()
     dt = max(t_step1 - t_step0, 0.0)
     step_elapsed += dt
     if step_idx >= warmup_steps:
         steady_elapsed += dt
         steady_steps += 1
+    obs = np.asarray(env.get_obs(), dtype=np.float32)
+    state = np.asarray(env.get_state(), dtype=np.float32)
+    avail_actions = [
+        list(map(int, env.get_avail_agent_actions(agent_id)))
+        for agent_id in range(env.n_agents)
+    ]
+    trace.append({
+        "step": int(step_idx),
+        "actions": list(map(int, chosen)),
+        "reward": float(reward),
+        "terminated": bool(terminated),
+        "battle_won": bool(info.get("battle_won", False)),
+        "episode_limit": bool(info.get("episode_limit", False)),
+        "dead_allies": int(info.get("dead_allies", -1)),
+        "dead_enemies": int(info.get("dead_enemies", -1)),
+        "obs_shape": list(obs.shape),
+        "state_shape": list(state.shape),
+        "obs_head": obs.flatten()[:8].astype(float).tolist(),
+        "state_head": state.flatten()[:8].astype(float).tolist(),
+        "avail_actions": avail_actions,
+    })
 t_close0 = time.perf_counter()
 env.close()
 t_end = time.perf_counter()
@@ -131,6 +156,7 @@ print(json.dumps({
     "steady_steps": steady_steps,
     "steady_elapsed_s": steady_elapsed,
     "steady_sps": steady_sps,
+    "trace": trace,
 }))
 """
     t0 = time.perf_counter()
@@ -190,6 +216,7 @@ print(json.dumps({
         steady_steps=int(payload.get('steady_steps', max(steps - warmup_steps, 0))),
         steady_elapsed_s=float(payload.get('steady_elapsed_s', 0.0)),
         steady_sps=float(payload.get('steady_sps', 0.0)),
+        trace=list(payload.get('trace', []) or []),
     )
 
 
@@ -226,6 +253,123 @@ def _summarize_by_profile(results: List[CaseResult]) -> Dict[str, Dict[str, Dict
         profile_rows = [row for row in results if row.profile == profile]
         summary_by_profile[profile] = _summarize(profile_rows)
     return summary_by_profile
+
+
+def _compare_case_pair(
+    *,
+    native: CaseResult,
+    bridge: CaseResult,
+    tol: float,
+) -> Dict[str, Any]:
+    payload: Dict[str, Any] = {
+        'ok': False,
+        'steps_compared': 0,
+        'mismatch_count': 0,
+        'mismatches': [],
+    }
+    if not native.ok or not bridge.ok:
+        payload['mismatches'] = ['native/bridge run failed; trace compare skipped']
+        payload['mismatch_count'] = 1
+        return payload
+    native_trace = native.trace or []
+    bridge_trace = bridge.trace or []
+    if not native_trace or not bridge_trace:
+        payload['mismatches'] = ['native/bridge trace missing']
+        payload['mismatch_count'] = 1
+        return payload
+
+    steps = min(len(native_trace), len(bridge_trace))
+    mismatches: list[str] = []
+    for step_idx in range(steps):
+        lhs = native_trace[step_idx]
+        rhs = bridge_trace[step_idx]
+        if lhs.get('actions') != rhs.get('actions'):
+            mismatches.append(f'step {step_idx}: actions mismatch')
+        if not _float_close(lhs.get('reward', 0.0), rhs.get('reward', 0.0), tol):
+            mismatches.append(
+                f"step {step_idx}: reward mismatch native={lhs.get('reward')} bridge={rhs.get('reward')}"
+            )
+        for key in ('terminated', 'battle_won', 'episode_limit', 'dead_allies', 'dead_enemies'):
+            if lhs.get(key) != rhs.get(key):
+                mismatches.append(f'step {step_idx}: {key} mismatch')
+        if list(lhs.get('obs_shape', [])) != list(rhs.get('obs_shape', [])):
+            mismatches.append(f'step {step_idx}: obs_shape mismatch')
+        if list(lhs.get('state_shape', [])) != list(rhs.get('state_shape', [])):
+            mismatches.append(f'step {step_idx}: state_shape mismatch')
+        if lhs.get('avail_actions') != rhs.get('avail_actions'):
+            mismatches.append(f'step {step_idx}: avail_actions mismatch')
+        if not _vector_close(lhs.get('obs_head', []), rhs.get('obs_head', []), tol):
+            mismatches.append(f'step {step_idx}: obs_head mismatch')
+        if not _vector_close(lhs.get('state_head', []), rhs.get('state_head', []), tol):
+            mismatches.append(f'step {step_idx}: state_head mismatch')
+        if len(mismatches) >= 20:
+            mismatches.append('... additional mismatches truncated ...')
+            break
+
+    payload['steps_compared'] = steps
+    payload['mismatch_count'] = len(mismatches)
+    payload['mismatches'] = mismatches
+    payload['ok'] = len(mismatches) == 0 and len(native_trace) == len(bridge_trace)
+    if len(native_trace) != len(bridge_trace):
+        payload['ok'] = False
+        payload['mismatch_count'] += 1
+        payload['mismatches'].append(
+            f'trace length mismatch native={len(native_trace)} bridge={len(bridge_trace)}'
+        )
+    return payload
+
+
+def _summarize_parity_by_profile(
+    *,
+    results: List[CaseResult],
+    tol: float,
+) -> Dict[str, Dict[str, Dict[str, Any]]]:
+    parity_by_profile: Dict[str, Dict[str, Dict[str, Any]]] = {}
+    profile_keys = sorted({row.profile for row in results})
+    for profile in profile_keys:
+        family_payload: Dict[str, Dict[str, Any]] = {}
+        profile_rows = [row for row in results if row.profile == profile]
+        for family in sorted({row.family for row in profile_rows}):
+            by_mode = {
+                row.backend_mode: row
+                for row in profile_rows
+                if row.family == family
+            }
+            native = by_mode.get('native')
+            bridge = by_mode.get('bridge')
+            if native is None or bridge is None:
+                family_payload[family] = {
+                    'ok': False,
+                    'steps_compared': 0,
+                    'mismatch_count': 1,
+                    'mismatches': ['missing native or bridge run'],
+                }
+                continue
+            family_payload[family] = _compare_case_pair(
+                native=native,
+                bridge=bridge,
+                tol=tol,
+            )
+        parity_by_profile[profile] = family_payload
+    return parity_by_profile
+
+
+def _float_close(lhs: Any, rhs: Any, tol: float) -> bool:
+    try:
+        return abs(float(lhs) - float(rhs)) <= tol
+    except Exception:
+        return False
+
+
+def _vector_close(lhs: Any, rhs: Any, tol: float) -> bool:
+    try:
+        lvec = [float(x) for x in list(lhs)]
+        rvec = [float(x) for x in list(rhs)]
+    except Exception:
+        return False
+    if len(lvec) != len(rvec):
+        return False
+    return all(abs(a - b) <= tol for a, b in zip(lvec, rvec))
 
 
 def main() -> int:
@@ -268,6 +412,17 @@ def main() -> int:
         default=20,
         help='Warmup step count for steady profile.',
     )
+    parser.add_argument(
+        '--parity-tol',
+        type=float,
+        default=1e-4,
+        help='Absolute tolerance for native-vs-bridge parity checks.',
+    )
+    parser.add_argument(
+        '--assert-parity',
+        action='store_true',
+        help='Fail validation if any profile/family parity check mismatches.',
+    )
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
 
@@ -306,7 +461,20 @@ def main() -> int:
                 )
 
     summary_by_profile = _summarize_by_profile(results)
+    parity_by_profile = _summarize_parity_by_profile(
+        results=results,
+        tol=float(args.parity_tol),
+    )
     primary_profile = run_profiles[0][0]
+    primary_parity = parity_by_profile.get(primary_profile, {})
+    for profile_name, family_payload in parity_by_profile.items():
+        for family, payload in family_payload.items():
+            status = 'PASS' if payload.get('ok', False) else 'FAIL'
+            print(
+                f"[{status}] parity profile={profile_name} family={family} "
+                f"steps={payload.get('steps_compared', 0)} "
+                f"mismatches={payload.get('mismatch_count', 0)}"
+            )
     output = {
         'requested_profile': args.profile,
         'profiles': [
@@ -320,6 +488,9 @@ def main() -> int:
         'results': [asdict(row) for row in results],
         'summary': summary_by_profile.get(primary_profile, {}),
         'summary_by_profile': summary_by_profile,
+        'parity': primary_parity,
+        'parity_by_profile': parity_by_profile,
+        'parity_tolerance': float(args.parity_tol),
     }
     output_path = Path(args.output_json)
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -328,6 +499,14 @@ def main() -> int:
 
     if not all(row.ok for row in results):
         return 1
+    if args.assert_parity:
+        all_parity_ok = all(
+            payload.get('ok', False)
+            for profile_payload in parity_by_profile.values()
+            for payload in profile_payload.values()
+        )
+        if not all_parity_ok:
+            return 1
     return 0
 
 
