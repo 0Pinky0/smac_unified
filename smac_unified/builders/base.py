@@ -153,25 +153,33 @@ class ActionBuilder(ABC):
     @abstractmethod
     def get_avail_agent_actions(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
+        agent_id: int,
     ) -> list[int]:
         raise NotImplementedError
 
     @abstractmethod
     def build_agent_action(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
+        agent_id: int,
+        action: int,
     ) -> Any | None:
         raise NotImplementedError
 
     def build_opponent_actions(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
+        actions: Sequence[int],
+        runtime: Any | None,
     ) -> Sequence[Any]:
-        del args, kwargs
+        del frame, context, actions, runtime
         return []
 
 
@@ -185,21 +193,19 @@ class FrameObservationBuilder(ABC):
     @abstractmethod
     def build_agent_obs(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
+        agent_id: int,
     ) -> np.ndarray:
         raise NotImplementedError
 
     def build_obs(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
     ) -> list[np.ndarray]:
-        frame = kwargs.get("frame")
-        context = kwargs.get("context")
-        if frame is None or context is None:
-            # Backward-compatible implementations may override this method.
-            raise NotImplementedError("build_obs requires frame and context.")
         return [
             self.build_agent_obs(frame=frame, context=context, agent_id=agent_id)
             for agent_id in range(context.n_agents)
@@ -216,8 +222,9 @@ class FrameStateBuilder(ABC):
     @abstractmethod
     def build_state(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
     ) -> np.ndarray:
         raise NotImplementedError
 
@@ -231,16 +238,18 @@ class FrameRewardBuilder(ABC):
 
     def reset(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
     ) -> None:
-        del args, kwargs
+        del frame, context
 
     @abstractmethod
     def build_step_reward(
         self,
-        *args,
-        **kwargs,
+        *,
+        frame: UnitFrame,
+        context: BuilderContext,
     ) -> float:
         raise NotImplementedError
 
