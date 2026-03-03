@@ -27,6 +27,26 @@ TEST_FUNCTIONS = [
         'tests.test_native_builders',
         'test_observation_and_state_handlers_follow_unified_contract',
     ),
+    (
+        'tests.test_parity_matrix',
+        'test_core_parity_matrix_covers_all_core_blocks',
+    ),
+    (
+        'tests.test_parity_matrix',
+        'test_core_parity_matrix_has_legacy_and_unified_symbols',
+    ),
+    (
+        'tests.test_handler_factory',
+        'test_factory_selects_classic_bundle_for_smac',
+    ),
+    (
+        'tests.test_handler_factory',
+        'test_factory_selects_conic_and_capability_bundle_for_smacv2',
+    ),
+    (
+        'tests.test_handler_factory',
+        'test_factory_selects_ability_augmented_bundle_for_smac_hard',
+    ),
 ]
 
 

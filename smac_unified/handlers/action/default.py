@@ -273,3 +273,29 @@ def _raw_unit_dict(units: Sequence[TrackedUnit]) -> dict[int, Any]:
     for unit in units:
         payload[unit.unit_id] = unit.raw if unit.raw is not None else unit
     return payload
+
+
+class ClassicActionHandler(DefaultActionHandler):
+    """Legacy SMAC action semantics (classic stop/move/attack indexing)."""
+
+
+class ConicFovActionHandler(DefaultActionHandler):
+    """SMACv2 conic-FOV action semantics (scaffolded variant)."""
+
+    def __init__(
+        self,
+        *,
+        num_fov_actions: int = 12,
+        action_mask: bool = True,
+    ):
+        super().__init__()
+        self.num_fov_actions = int(max(0, num_fov_actions))
+        self.action_mask = bool(action_mask)
+
+
+class AbilityAugmentedActionHandler(DefaultActionHandler):
+    """SMAC-Hard ability-augmented action semantics (scaffolded variant)."""
+
+    def __init__(self, *, use_ability: bool = True):
+        super().__init__()
+        self.use_ability = bool(use_ability)

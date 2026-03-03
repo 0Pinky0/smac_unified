@@ -8,15 +8,12 @@ import numpy as np
 from ..config import VariantSwitches, merge_switches
 from ..handlers import (
     ActionHandler,
-    DefaultActionHandler,
-    DefaultObservationHandler,
-    DefaultRewardHandler,
-    DefaultStateHandler,
     HandlerContext,
     ObservationHandler,
     RewardHandler,
     StateHandler,
     UnitFrame,
+    build_default_handler_bundle,
 )
 from ..maps import MapParams, get_map_params
 from ..players import OpponentEpisodeContext, OpponentRuntime
@@ -89,21 +86,26 @@ class SMACEnv:
             self._env_kwargs.get('state_last_action', True)
         )
         self._seed = self._env_kwargs.get('seed')
+        default_handlers = build_default_handler_bundle(
+            switches=self.switches,
+            map_params=self.map_params,
+            env_kwargs=self._env_kwargs,
+        )
         self._action_handler: ActionHandler = (
             self._env_kwargs.get('action_handler')
-            or DefaultActionHandler()
+            or default_handlers.action_handler
         )
         self._observation_handler: ObservationHandler = (
             self._env_kwargs.get('observation_handler')
-            or DefaultObservationHandler()
+            or default_handlers.observation_handler
         )
         self._state_handler: StateHandler = (
             self._env_kwargs.get('state_handler')
-            or DefaultStateHandler()
+            or default_handlers.state_handler
         )
         self._reward_handler: RewardHandler = (
             self._env_kwargs.get('reward_handler')
-            or DefaultRewardHandler()
+            or default_handlers.reward_handler
         )
 
         self._attack_slots = max(self.n_agents, self.n_enemies)

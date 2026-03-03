@@ -117,3 +117,7 @@ def _unit_sight_range(
 
 def _obs_vector_size(context: HandlerContext) -> int:
     return 4 + context.attack_slots * 6 + max(context.n_agents - 1, 1) * 6 + 4
+
+
+class CapabilityObservationHandler(DefaultObservationHandler):
+    """SMACv2 capability-aware observation semantics (scaffolded variant)."""

@@ -33,3 +33,7 @@ class DefaultStateHandler(StateHandler):
         if context.state_last_action:
             chunks.append(np.asarray(context.last_action, dtype=np.float32).flatten())
         return np.concatenate(chunks, axis=0).astype(np.float32)
+
+
+class CapabilityStateHandler(DefaultStateHandler):
+    """SMACv2 capability-aware global-state semantics (scaffolded variant)."""
