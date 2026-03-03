@@ -5,9 +5,9 @@
       "map_name": "3m",
       "backend_mode": "native",
       "ok": true,
-      "elapsed_s": 6.358913972999289,
-      "steps": 3,
-      "sps": 0.47177867364432974,
+      "elapsed_s": 5.8911906339999405,
+      "steps": 2,
+      "sps": 0.33948994766140517,
       "error": ""
     },
     {
@@ -15,9 +15,9 @@
       "map_name": "3m",
       "backend_mode": "bridge",
       "ok": true,
-      "elapsed_s": 5.192465035001078,
-      "steps": 3,
-      "sps": 0.577760269886801,
+      "elapsed_s": 5.118683773998782,
+      "steps": 2,
+      "sps": 0.390725445896724,
       "error": ""
     },
     {
@@ -25,9 +25,9 @@
       "map_name": "8m",
       "backend_mode": "native",
       "ok": true,
-      "elapsed_s": 5.8168498759987415,
-      "steps": 3,
-      "sps": 0.5157430678035001,
+      "elapsed_s": 5.821875805999298,
+      "steps": 2,
+      "sps": 0.34353189017516483,
       "error": ""
     },
     {
@@ -35,9 +35,9 @@
       "map_name": "8m",
       "backend_mode": "bridge",
       "ok": true,
-      "elapsed_s": 5.240659656999924,
-      "steps": 3,
-      "sps": 0.5724470193352309,
+      "elapsed_s": 5.139625444000558,
+      "steps": 2,
+      "sps": 0.3891334148356245,
       "error": ""
     },
     {
@@ -45,9 +45,9 @@
       "map_name": "3m",
       "backend_mode": "native",
       "ok": true,
-      "elapsed_s": 5.90816379700118,
-      "steps": 3,
-      "sps": 0.5077719750293174,
+      "elapsed_s": 5.720196230999136,
+      "steps": 2,
+      "sps": 0.3496383549154333,
       "error": ""
     },
     {
@@ -55,33 +55,33 @@
       "map_name": "3m",
       "backend_mode": "bridge",
       "ok": true,
-      "elapsed_s": 9.618596050000633,
-      "steps": 3,
-      "sps": 0.3118958301611806,
+      "elapsed_s": 9.404740851998213,
+      "steps": 2,
+      "sps": 0.21265870388922653,
       "error": ""
     }
   ],
   "summary": {
     "smac": {
       "native_ok": 1.0,
-      "native_sps": 0.47177867364432974,
+      "native_sps": 0.33948994766140517,
       "bridge_ok": 1.0,
-      "bridge_sps": 0.577760269886801,
-      "native_vs_bridge_delta_pct": -18.34352442808778
+      "bridge_sps": 0.390725445896724,
+      "native_vs_bridge_delta_pct": -13.112915673493482
     },
     "smac-hard": {
       "native_ok": 1.0,
-      "native_sps": 0.5077719750293174,
+      "native_sps": 0.3496383549154333,
       "bridge_ok": 1.0,
-      "bridge_sps": 0.3118958301611806,
-      "native_vs_bridge_delta_pct": 62.80178377726707
+      "bridge_sps": 0.21265870388922653,
+      "native_vs_bridge_delta_pct": 64.41290599493131
     },
     "smacv2": {
       "native_ok": 1.0,
-      "native_sps": 0.5157430678035001,
+      "native_sps": 0.34353189017516483,
       "bridge_ok": 1.0,
-      "bridge_sps": 0.5724470193352309,
-      "native_vs_bridge_delta_pct": -9.905537039494023
+      "bridge_sps": 0.3891334148356245,
+      "native_vs_bridge_delta_pct": -11.718737821505878
     }
   }
 }
