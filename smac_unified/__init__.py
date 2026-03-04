@@ -48,6 +48,7 @@ from .core import (
     SC2EnvRawSession,
     SC2SessionConfig,
 )
+from .compat import LegacyEnvAdapter, make_legacy_env, translate_legacy_kwargs
 from .players import (
     EngineBotOpponentRuntime,
     HardScriptCompatibilityWrapper,
@@ -93,6 +94,9 @@ __all__ = [
     'RewardPositiveMode',
     'SC2EnvRawSession',
     'SC2SessionConfig',
+    'LegacyEnvAdapter',
+    'make_legacy_env',
+    'translate_legacy_kwargs',
     'ScriptedOpponentConfig',
     'ScriptedOpponentRuntime',
     'StateHandler',

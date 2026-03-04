@@ -66,7 +66,8 @@ def _default_opponent_runtime(
     switches: VariantSwitches,
     opponent_config: Mapping[str, Any] | None,
 ) -> OpponentRuntime:
-    if switches.opponent_mode == 'scripted_pool' or family == 'smac-hard':
+    del family
+    if switches.opponent_mode == 'scripted_pool':
         return build_scripted_runtime_from_config(opponent_config or {})
     return EngineBotOpponentRuntime()
 
