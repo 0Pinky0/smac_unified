@@ -106,7 +106,7 @@ class ScriptedOpponentRuntime(OpponentRuntime):
         if self._script_dict:
             return list(self._script_dict.get(map_name, []))
         try:
-            from smac_hard.env.scripts import SCRIPT_DICT
+            from .smac_hard_scripts import SCRIPT_DICT
             resolved = list(SCRIPT_DICT.get(map_name, []))
             if resolved:
                 return resolved
