@@ -179,6 +179,18 @@ TEST_FUNCTIONS = [
         'tests.test_validation_parity',
         'test_steady_parity_summary_uses_configured_window',
     ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_full_trace_detects_late_step_mismatch',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_steady_parity_summary_strict_mode_catches_late_mismatch',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_summary_detects_repeat_count_mismatch',
+    ),
 ]
 
 

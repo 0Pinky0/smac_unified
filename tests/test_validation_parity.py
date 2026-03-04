@@ -443,3 +443,82 @@ def test_steady_parity_summary_uses_configured_window():
     assert payload['ok'] is True
     assert payload['steps_compared'] == 1
 
+
+def _trace_step(*, step: int, reward: float = 0.0):
+    return {
+        'step': step,
+        'actions': [1],
+        'reward': reward,
+        'terminated': False,
+        'battle_won': False,
+        'episode_limit': False,
+        'dead_allies': 0,
+        'dead_enemies': 0,
+        'obs_shape': [1, 4],
+        'state_shape': [6],
+        'obs_head': [0.0],
+        'state_head': [0.0],
+        'avail_actions': [[0, 1]],
+    }
+
+
+def test_parity_compare_full_trace_detects_late_step_mismatch():
+    bridge_trace = [_trace_step(step=idx, reward=0.0) for idx in range(5)]
+    native_trace = [
+        _trace_step(step=idx, reward=1.0 if idx == 4 else 0.0)
+        for idx in range(5)
+    ]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+        max_steps=0,
+    )
+    assert result['ok'] is False
+    assert result['steps_compared'] == 5
+    assert result['first_mismatch_field'] == 'reward'
+    assert result['first_mismatch_step'] == 4
+
+
+def test_steady_parity_summary_strict_mode_catches_late_mismatch():
+    bridge_trace = [_trace_step(step=idx, reward=0.0) for idx in range(4)]
+    native_trace = [
+        _trace_step(step=idx, reward=2.0 if idx == 3 else 0.0)
+        for idx in range(4)
+    ]
+    rows = [
+        _case('bridge', bridge_trace, profile='steady'),
+        _case('native', native_trace, profile='steady'),
+    ]
+    parity = _summarize_parity_by_profile(
+        results=rows,
+        atol=1e-6,
+        rtol=1e-6,
+        steady_parity_steps=0,
+    )
+    payload = parity['steady']['smac']
+    assert payload['ok'] is False
+    assert payload['first_mismatch_field'] == 'reward'
+    assert payload['first_mismatch_step'] == 3
+    assert payload['mismatch_field_counts']['reward'] >= 1
+
+
+def test_parity_summary_detects_repeat_count_mismatch():
+    trace = [_trace_step(step=0, reward=0.0)]
+    rows = [
+        _case('bridge', trace, repeat_idx=0, profile='steady'),
+        _case('bridge', trace, repeat_idx=1, profile='steady'),
+        _case('native', trace, repeat_idx=0, profile='steady'),
+    ]
+    parity = _summarize_parity_by_profile(
+        results=rows,
+        atol=1e-6,
+        rtol=1e-6,
+        steady_parity_steps=0,
+    )
+    payload = parity['steady']['smac']
+    assert payload['ok'] is False
+    assert payload['first_mismatch_field'] == 'repeat_count'
+    assert payload['mismatch_field_counts']['repeat_count'] == 1
+
