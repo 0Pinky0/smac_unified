@@ -109,7 +109,19 @@ TEST_FUNCTIONS = [
     ),
     (
         'tests.test_api_parity',
+        'test_smacv2_env_info_includes_cap_shape_field',
+    ),
+    (
+        'tests.test_api_parity',
         'test_step_batch_matches_legacy_payload_contract',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_reset_batch_matches_legacy_payload_contract',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_seed_supports_getter_setter_and_rng_reseed',
     ),
     (
         'tests.test_validation_parity',

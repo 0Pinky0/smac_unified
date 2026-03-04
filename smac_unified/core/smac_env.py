@@ -273,9 +273,13 @@ class SMACEnv:
         self._runtime_lifecycle_owner = owner
 
     def seed(self, seed: int | None = None):
-        self._seed = seed
+        if seed is None:
+            return self._seed
+        self._seed = int(seed)
+        self._rng = np.random.default_rng(self._seed)
         if self._session is not None:
-            self._session.config.seed = seed
+            self._session.config.seed = self._seed
+        return self._seed
 
     def reset(self, episode_config: Mapping[str, Any] | None = None, **kwargs):
         del kwargs
@@ -446,6 +450,21 @@ class SMACEnv:
             'info': info,
         }
 
+    def reset_batch(
+        self,
+        episode_config: Mapping[str, Any] | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
+        obs, state = self.reset(episode_config=episode_config, **kwargs)
+        return {
+            'obs': obs,
+            'state': state,
+            'avail_actions': self.get_avail_actions(),
+            'reward': 0.0,
+            'terminated': False,
+            'info': {},
+        }
+
     def get_episode_step(self) -> int:
         return int(self._episode_steps)
 
@@ -501,7 +520,7 @@ class SMACEnv:
         )
 
     def get_env_info(self):
-        return {
+        info = {
             'state_shape': self.get_state_size(),
             'obs_shape': self.get_obs_size(),
             'n_actions': self.n_actions,
@@ -523,6 +542,14 @@ class SMACEnv:
             'enemy_features': list(self.enemy_state_attr_names),
             'native_backend': True,
         }
+        if self.variant == 'smacv2':
+            cap_shape = 0
+            if isinstance(self.capability_config, Mapping):
+                cap_shape = int(self.capability_config.get('cap_shape', 0) or 0)
+            info['cap_shape'] = cap_shape
+        if self.variant == 'smac-hard':
+            info['pysc2_backend'] = True
+        return info
 
     def get_stats(self) -> dict[str, float]:
         win_rate = (

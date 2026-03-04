@@ -27,6 +27,12 @@ def test_env_api_exposes_legacy_stats_and_metadata_fields():
     assert env.get_total_actions() == env.n_actions
 
 
+def test_smacv2_env_info_includes_cap_shape_field():
+    env = SMACEnv(variant='smacv2', map_name='8m')
+    env_info = env.get_env_info()
+    assert env_info['cap_shape'] == 0
+
+
 def test_step_batch_matches_legacy_payload_contract():
     env = SMACEnv(variant='smac', map_name='3m')
 
@@ -55,4 +61,38 @@ def test_step_batch_matches_legacy_payload_contract():
     assert payload['obs'][0].shape[0] == 1
     assert payload['state'].shape[0] == 2
     assert payload['avail_actions'][0][0] == 1
+
+
+def test_reset_batch_matches_legacy_payload_contract():
+    env = SMACEnv(variant='smac', map_name='3m')
+
+    def _reset_stub(self, episode_config=None, **kwargs):
+        del episode_config, kwargs
+        return [np.asarray([1.0], dtype=np.float32)], np.asarray([0.5], dtype=np.float32)
+
+    def _avail_stub(self):
+        return [[1, 0, 1]]
+
+    env.reset = MethodType(_reset_stub, env)
+    env.get_avail_actions = MethodType(_avail_stub, env)
+
+    payload = env.reset_batch()
+    assert payload['terminated'] is False
+    assert np.isclose(payload['reward'], 0.0)
+    assert payload['info'] == {}
+    assert payload['obs'][0].shape[0] == 1
+    assert payload['state'].shape[0] == 1
+    assert payload['avail_actions'][0][0] == 1
+
+
+def test_seed_supports_getter_setter_and_rng_reseed():
+    env = SMACEnv(variant='smac', map_name='3m')
+    assert env.seed() is None
+    assert env.seed(123) == 123
+    first = env._rng.uniform(size=4)
+    assert env.seed() == 123
+    env.seed(123)
+    second = env._rng.uniform(size=4)
+    assert np.allclose(first, second)
+    assert env._session.config.seed == 123
 
