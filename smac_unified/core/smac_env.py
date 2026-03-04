@@ -196,6 +196,7 @@ class SMACEnv:
         self._obs = None
         self._opponent_obs = None
         self._latest_timesteps = []
+        self._pending_step_timesteps: list[Any] | None = None
 
         self.map_x = 32.0
         self.map_y = 32.0
@@ -352,10 +353,26 @@ class SMACEnv:
         return self.get_obs(), self.get_state()
 
     def step(self, actions: Sequence[int]):
+        actions_int = self._normalize_actions(actions)
+        ally_sc_actions, opponent_actions = self._encode_step_actions(actions_int)
+        self._submit_step_actions(
+            ally_sc_actions=ally_sc_actions,
+            opponent_actions=opponent_actions,
+        )
+        self._collect_step_timesteps()
+        reward, terminated, info = self._decode_step_outcome()
+        return float(reward), bool(terminated), info
+
+    def _normalize_actions(self, actions: Sequence[int]) -> list[int]:
         actions_int = [int(a) for a in actions]
         if len(actions_int) < self.n_agents:
             actions_int.extend([0] * (self.n_agents - len(actions_int)))
-        actions_int = actions_int[: self.n_agents]
+        return actions_int[: self.n_agents]
+
+    def _encode_step_actions(
+        self,
+        actions_int: Sequence[int],
+    ) -> tuple[List[Any], Sequence[Any]]:
         self._update_last_action_matrix(actions_int)
         self._refresh_handler_context()
 
@@ -376,10 +393,32 @@ class SMACEnv:
             actions=actions_int,
             runtime=self._opponent_runtime,
         )
-        self._latest_timesteps = self._session.step(
+        return ally_sc_actions, opponent_actions
+
+    def _submit_step_actions(
+        self,
+        *,
+        ally_sc_actions: Sequence[Any],
+        opponent_actions: Sequence[Any] | None,
+    ) -> None:
+        if hasattr(self._session, 'submit_step'):
+            self._session.submit_step(
+                agent_actions=ally_sc_actions,
+                opponent_actions=opponent_actions,
+            )
+            return
+        # Backward-compatible fallback for stub/test sessions with only step().
+        self._pending_step_timesteps = self._session.step(
             agent_actions=ally_sc_actions,
             opponent_actions=opponent_actions,
         )
+
+    def _collect_step_timesteps(self) -> None:
+        if self._pending_step_timesteps is not None:
+            self._latest_timesteps = self._pending_step_timesteps
+            self._pending_step_timesteps = None
+        else:
+            self._latest_timesteps = self._session.collect_step()
         self._obs = self._latest_timesteps[0].observation
         self._opponent_obs = (
             self._latest_timesteps[1].observation
@@ -397,6 +436,7 @@ class SMACEnv:
         self._sync_legacy_unit_views()
         self._refresh_handler_context()
 
+    def _decode_step_outcome(self) -> tuple[float, bool, dict[str, Any]]:
         terminated = bool(self._latest_timesteps[0].last())
         reward = self._reward_handler.build_step_reward(
             frame=self._unit_frame,

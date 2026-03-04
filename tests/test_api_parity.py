@@ -139,6 +139,44 @@ def test_handler_context_refresh_reuses_instance():
     assert ctx.last_action is env.last_action
 
 
+def test_step_pipeline_invokes_encode_submit_collect_decode_in_order():
+    env = SMACEnv(variant='smac', map_name='3m')
+    call_order = []
+
+    def _normalize_stub(self, actions):
+        del actions
+        call_order.append('normalize')
+        return [0] * self.n_agents
+
+    def _encode_stub(self, actions_int):
+        del actions_int
+        call_order.append('encode')
+        return [], []
+
+    def _submit_stub(self, *, ally_sc_actions, opponent_actions):
+        del ally_sc_actions, opponent_actions
+        call_order.append('submit')
+
+    def _collect_stub(self):
+        call_order.append('collect')
+
+    def _decode_stub(self):
+        call_order.append('decode')
+        return 1.5, False, {'ok': True}
+
+    env._normalize_actions = MethodType(_normalize_stub, env)
+    env._encode_step_actions = MethodType(_encode_stub, env)
+    env._submit_step_actions = MethodType(_submit_stub, env)
+    env._collect_step_timesteps = MethodType(_collect_stub, env)
+    env._decode_step_outcome = MethodType(_decode_stub, env)
+
+    reward, terminated, info = env.step([1, 2, 3])
+    assert np.isclose(reward, 1.5)
+    assert terminated is False
+    assert info == {'ok': True}
+    assert call_order == ['normalize', 'encode', 'submit', 'collect', 'decode']
+
+
 def test_transport_profile_b2_propagates_to_native_session_config():
     env = make_env(
         family='smac',

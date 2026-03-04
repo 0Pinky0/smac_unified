@@ -248,6 +248,10 @@ TEST_FUNCTIONS = [
     ),
     (
         'tests.test_api_parity',
+        'test_step_pipeline_invokes_encode_submit_collect_decode_in_order',
+    ),
+    (
+        'tests.test_api_parity',
         'test_transport_profile_b2_propagates_to_native_session_config',
     ),
     (
