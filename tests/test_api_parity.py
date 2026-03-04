@@ -4,6 +4,7 @@ from types import MethodType
 
 import numpy as np
 
+from smac_unified import make_env
 from smac_unified.core import SMACEnv
 
 
@@ -123,4 +124,57 @@ def test_handler_context_refresh_reuses_instance():
     assert ctx.episode_step == 5
     assert np.isclose(ctx.max_distance_x, 77.0)
     assert ctx.last_action is env.last_action
+
+
+def test_transport_profile_b2_propagates_to_native_session_config():
+    env = make_env(
+        family='smac',
+        map_name='3m',
+        normalized_api=False,
+        backend_mode='native',
+        transport_profile='B2',
+    )
+    cfg = env._session.config
+    assert cfg.transport_profile == 'B2'
+    assert cfg.reuse_step_observe_requests is True
+    assert cfg.pipeline_step_and_observe is True
+    assert cfg.pipeline_actions_and_step is False
+    assert cfg.ensure_available_actions is True
+    env.close()
+
+
+def test_native_options_override_transport_profile_defaults():
+    env = make_env(
+        family='smac',
+        map_name='3m',
+        normalized_api=False,
+        backend_mode='native',
+        transport_profile='B2',
+        native_options={
+            'pipeline_step_and_observe': False,
+            'pipeline_actions_and_step': True,
+        },
+    )
+    cfg = env._session.config
+    assert cfg.transport_profile == 'B2'
+    assert cfg.reuse_step_observe_requests is True
+    assert cfg.pipeline_step_and_observe is False
+    assert cfg.pipeline_actions_and_step is True
+    env.close()
+
+
+def test_experimental_transport_flag_propagates_to_session_config():
+    env = make_env(
+        family='smac',
+        map_name='3m',
+        normalized_api=False,
+        backend_mode='native',
+        transport_profile='B4',
+        allow_experimental_transport=True,
+    )
+    cfg = env._session.config
+    assert cfg.transport_profile == 'B4'
+    assert cfg.ensure_available_actions is False
+    assert cfg.allow_experimental_transport is True
+    env.close()
 

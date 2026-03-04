@@ -144,6 +144,18 @@ TEST_FUNCTIONS = [
         'test_handler_context_refresh_reuses_instance',
     ),
     (
+        'tests.test_api_parity',
+        'test_transport_profile_b2_propagates_to_native_session_config',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_native_options_override_transport_profile_defaults',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_experimental_transport_flag_propagates_to_session_config',
+    ),
+    (
         'tests.test_validation_parity',
         'test_parity_compare_passes_for_matching_traces',
     ),
