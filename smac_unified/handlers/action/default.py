@@ -207,17 +207,26 @@ class DefaultActionHandler(ActionHandler):
         actions: Sequence[int],
         runtime: Any | None,
     ) -> Sequence[Any]:
-        if (
-            runtime is None
-            or getattr(context.switches, 'opponent_mode', '') != 'scripted_pool'
-        ):
+        if getattr(context.switches, 'opponent_mode', '') != 'scripted_pool':
             return []
+        if runtime is None:
+            raise RuntimeError(
+                'Scripted opponent mode requires a bound opponent runtime.'
+            )
         env = context.env
         if env is None:
-            return []
+            raise RuntimeError(
+                'Scripted opponent mode requires env context for runtime payload.'
+            )
         session = getattr(env, '_session', None)
-        if session is None or int(getattr(session, 'num_agents', 1)) < 2:
-            return []
+        if session is None:
+            raise RuntimeError(
+                'Scripted opponent mode requires an active native session.'
+            )
+        if int(getattr(session, 'num_agents', 1)) < 2:
+            raise RuntimeError(
+                'Scripted opponent mode requires a dual-controller session.'
+            )
 
         payload = {
             'agents': _raw_unit_dict(frame.enemies.units),
@@ -237,12 +246,18 @@ class DefaultActionHandler(ActionHandler):
             info={},
             payload=payload,
         )
-        if hasattr(runtime, 'compute_actions'):
-            try:
-                return runtime.compute_actions(runtime_ctx)
-            except Exception:
-                return []
-        return []
+        if not hasattr(runtime, 'compute_actions'):
+            raise RuntimeError(
+                'Scripted opponent runtime must implement compute_actions().'
+            )
+        result = runtime.compute_actions(runtime_ctx)
+        if result is None:
+            return []
+        if not isinstance(result, Sequence):
+            raise TypeError(
+                'Scripted opponent runtime compute_actions() must return a sequence.'
+            )
+        return result
 
     @staticmethod
     def _build_move_cmd(tag: int, x: float, y: float):
