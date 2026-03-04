@@ -611,3 +611,35 @@ def test_native_option_builder_can_enable_capture_debug_probe():
     options = _build_native_options(args)
     assert options['capture_debug_probe'] is True
 
+
+def test_parity_compare_reports_action_divergence_step_counts():
+    bridge_trace = [_trace_step(step=idx, reward=0.0) for idx in range(5)]
+    native_trace = [dict(step_payload) for step_payload in bridge_trace]
+    native_trace[4]['actions'] = [2]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert result['ok'] is False
+    assert result['first_mismatch_field'] == 'actions'
+    assert result['first_mismatch_step'] == 4
+    assert result['mismatch_step_counts'].get('4', 0) >= 1
+
+
+def test_parity_compare_aggregates_step_counts_for_multiple_mismatch_steps():
+    bridge_trace = [_trace_step(step=idx, reward=0.0) for idx in range(4)]
+    native_trace = [dict(step_payload) for step_payload in bridge_trace]
+    native_trace[1]['reward'] = 1.0
+    native_trace[3]['reward'] = 2.0
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert result['ok'] is False
+    assert result['mismatch_step_counts'].get('1', 0) >= 1
+    assert result['mismatch_step_counts'].get('3', 0) >= 1
+

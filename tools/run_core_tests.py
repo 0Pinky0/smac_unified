@@ -80,6 +80,10 @@ TEST_FUNCTIONS = [
         'test_conic_handler_invalidates_same_step_cache_after_fov_change',
     ),
     (
+        'tests.test_action_parity',
+        'test_ability_selection_is_stable_with_unsupported_order_noise',
+    ),
+    (
         'tests.test_obs_state_parity',
         'test_observation_handler_restores_structured_feature_toggles',
     ),
@@ -158,6 +162,10 @@ TEST_FUNCTIONS = [
     (
         'tests.test_api_parity',
         'test_last_action_update_is_in_place_one_hot',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_last_action_contract_tracks_requested_ids_per_agent',
     ),
     (
         'tests.test_api_parity',
@@ -242,6 +250,14 @@ TEST_FUNCTIONS = [
     (
         'tests.test_validation_parity',
         'test_native_option_builder_can_enable_capture_debug_probe',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_reports_action_divergence_step_counts',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_aggregates_step_counts_for_multiple_mismatch_steps',
     ),
 ]
 

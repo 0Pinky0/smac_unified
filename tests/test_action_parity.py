@@ -377,3 +377,14 @@ def test_conic_handler_invalidates_same_step_cache_after_fov_change():
     avail1 = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
     assert avail1[10] == 1
 
+
+def test_ability_selection_is_stable_with_unsupported_order_noise():
+    selected_a = AbilityAugmentedActionHandler._select_ability_config(
+        ability_ids=(9999, 380, 7777),
+    )
+    selected_b = AbilityAugmentedActionHandler._select_ability_config(
+        ability_ids=(7777, 9999, 380),
+    )
+    assert selected_a == selected_b
+    assert selected_a is not None
+

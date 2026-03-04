@@ -108,6 +108,16 @@ def test_last_action_update_is_in_place_one_hot():
     assert np.allclose(env.last_action[:, 1], np.ones(env.n_agents))
 
 
+def test_last_action_contract_tracks_requested_ids_per_agent():
+    env = SMACEnv(variant='smac', map_name='3m')
+    requested = [idx % env.n_actions for idx in range(env.n_agents)]
+    env._update_last_action_matrix(requested)
+    for agent_id, action_id in enumerate(requested):
+        row = env.last_action[agent_id]
+        assert np.isclose(row[action_id], 1.0)
+        assert np.isclose(np.sum(row), 1.0)
+
+
 def test_handler_context_refresh_reuses_instance():
     env = SMACEnv(variant='smac', map_name='3m')
     env._episode_steps = 2
