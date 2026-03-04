@@ -73,6 +73,27 @@ class _CountingAbilityHandler(AbilityAugmentedActionHandler):
         return {0: (380,), 1: (380,)}
 
 
+class _ScriptRuntimeOk:
+    @staticmethod
+    def compute_actions(context):
+        del context
+        return []
+
+
+class _ScriptRuntimeBoom:
+    @staticmethod
+    def compute_actions(context):
+        del context
+        raise ValueError('scripted-runtime-failure')
+
+
+class _ScriptRuntimeBadShape:
+    @staticmethod
+    def compute_actions(context):
+        del context
+        return 1
+
+
 def _tracked(
     *,
     unit_id: int,
@@ -387,4 +408,132 @@ def test_ability_selection_is_stable_with_unsupported_order_noise():
     )
     assert selected_a == selected_b
     assert selected_a is not None
+
+
+def test_scripted_opponent_actions_require_runtime_in_scripted_mode():
+    frame = UnitFrame(
+        allies=_team([_tracked(unit_id=0, tag=1, x=0.0, y=0.0)]),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=4.0, y=0.0)]),
+        prev_allies_health=np.asarray([45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=12,
+    )
+    context = _context(
+        n_agents=1,
+        n_enemies=1,
+        n_actions=7,
+        n_actions_no_attack=6,
+        attack_slots=1,
+        env=SimpleNamespace(_session=SimpleNamespace(num_agents=2)),
+    )
+    context.switches = SimpleNamespace(opponent_mode='scripted_pool')
+    handler = ClassicActionHandler()
+    try:
+        handler.build_opponent_actions(
+            frame=frame,
+            context=context,
+            actions=[1],
+            runtime=None,
+        )
+        assert False, 'Expected RuntimeError when scripted runtime is missing.'
+    except RuntimeError as exc:
+        assert 'bound opponent runtime' in str(exc)
+
+
+def test_scripted_opponent_actions_require_dual_controller_session():
+    frame = UnitFrame(
+        allies=_team([_tracked(unit_id=0, tag=1, x=0.0, y=0.0)]),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=4.0, y=0.0)]),
+        prev_allies_health=np.asarray([45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=13,
+    )
+    context = _context(
+        n_agents=1,
+        n_enemies=1,
+        n_actions=7,
+        n_actions_no_attack=6,
+        attack_slots=1,
+        env=SimpleNamespace(_session=SimpleNamespace(num_agents=1)),
+    )
+    context.switches = SimpleNamespace(opponent_mode='scripted_pool')
+    handler = ClassicActionHandler()
+    try:
+        handler.build_opponent_actions(
+            frame=frame,
+            context=context,
+            actions=[1],
+            runtime=_ScriptRuntimeOk(),
+        )
+        assert False, 'Expected RuntimeError when scripted session is not dual-controller.'
+    except RuntimeError as exc:
+        assert 'dual-controller session' in str(exc)
+
+
+def test_scripted_opponent_actions_propagate_runtime_exceptions():
+    frame = UnitFrame(
+        allies=_team([_tracked(unit_id=0, tag=1, x=0.0, y=0.0)]),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=4.0, y=0.0)]),
+        prev_allies_health=np.asarray([45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=14,
+    )
+    context = _context(
+        n_agents=1,
+        n_enemies=1,
+        n_actions=7,
+        n_actions_no_attack=6,
+        attack_slots=1,
+        env=SimpleNamespace(_session=SimpleNamespace(num_agents=2)),
+    )
+    context.switches = SimpleNamespace(opponent_mode='scripted_pool')
+    handler = ClassicActionHandler()
+    try:
+        handler.build_opponent_actions(
+            frame=frame,
+            context=context,
+            actions=[1],
+            runtime=_ScriptRuntimeBoom(),
+        )
+        assert False, 'Expected scripted runtime exception to propagate.'
+    except ValueError as exc:
+        assert 'scripted-runtime-failure' in str(exc)
+
+
+def test_scripted_opponent_actions_validate_runtime_return_type():
+    frame = UnitFrame(
+        allies=_team([_tracked(unit_id=0, tag=1, x=0.0, y=0.0)]),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=4.0, y=0.0)]),
+        prev_allies_health=np.asarray([45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=15,
+    )
+    context = _context(
+        n_agents=1,
+        n_enemies=1,
+        n_actions=7,
+        n_actions_no_attack=6,
+        attack_slots=1,
+        env=SimpleNamespace(_session=SimpleNamespace(num_agents=2)),
+    )
+    context.switches = SimpleNamespace(opponent_mode='scripted_pool')
+    handler = ClassicActionHandler()
+    try:
+        handler.build_opponent_actions(
+            frame=frame,
+            context=context,
+            actions=[1],
+            runtime=_ScriptRuntimeBadShape(),
+        )
+        assert False, 'Expected TypeError when runtime returns non-sequence.'
+    except TypeError as exc:
+        assert 'must return a sequence' in str(exc)
 

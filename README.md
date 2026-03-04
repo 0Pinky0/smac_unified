@@ -145,14 +145,24 @@ Reward scaling ownership is centralized in the reward handler path.
 
 ### Scripted Opponents (`smac-hard`)
 
-Scripted runtime is integrated through the common opponent interface. For safety, native mode defaults to single-controller bot opposition and leaves dual-controller scripted stepping disabled unless explicitly enabled:
+Scripted runtime is integrated through the common opponent interface. Native `smac-hard` now defaults to scripted dual-controller sessions, and launch is fail-fast if scripted prerequisites are not satisfied (no silent fallback to SC2 bot/no-op):
 
 ```python
 env = make_env(
     family="smac-hard",
     map_name="3m",
     backend_mode="native",
-    native_options={"enable_dual_controller": True},
+)
+```
+
+To intentionally use SC2 built-in bot opposition instead of scripted pool, switch opponent mode explicitly:
+
+```python
+env = make_env(
+    family="smac-hard",
+    map_name="3m",
+    backend_mode="native",
+    logic_switches={"opponent_mode": "sc2_computer"},
 )
 ```
 
@@ -203,21 +213,29 @@ conda run -n smacnt python tools/native_core_validation.py --profile steady --st
 
 `B4` remains experimental. In the validator path, `ensure_available_actions=False` is safety-guarded and requires explicit `allow_experimental_transport=True` support.
 
+Strict scripted-native `smac-hard` matrix (`B0`-`B3`, repeats=`2`):
+
+```bash
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --output-json tools/native_core_validation_smachard_b0.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true}' --output-json tools/native_core_validation_smachard_b1.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true}' --output-json tools/native_core_validation_smachard_b2.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true, "pipeline_actions_and_step": true}' --output-json tools/native_core_validation_smachard_b3.json
+```
+
 ## SPS Rollout Decisions
 
-Strict full-trace matrix (`steady`, repeats=`2`, `--steady-parity-mode strict`) outcome:
+Strict outcomes after scripted-native alignment:
 
-- `B0`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`.
-- `B1`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`.
-- `B2`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`; highest median steady SPS among `B0`-`B3` (`smac=1111.6`, `smacv2=1189.1`, `smac-hard=1311.3`).
-- `B3`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`.
-- `B4`: remains experimental-only behind the explicit experimental transport guard.
+- Full-family strict baseline gate (`B0`, repeats=`1`) passes for `smac`, `smacv2`, and `smac-hard`.
+- Scripted-native `smac-hard` strict matrix (`B0`-`B3`, repeats=`2`) passes on all profiles with zero mismatches.
+- `smac-hard` native median steady SPS in this scripted matrix: `B0=192.1`, `B1=238.3`, `B2=257.2`, `B3=275.8`.
+- `B4` remains experimental-only behind the explicit transport safety guard.
 
 Rollout policy:
 
 - Keep conservative runtime defaults unchanged.
-- Do **not** promote `B2` to default until strict long-horizon parity is clean for `smac-hard` as well.
-- Keep `B2` as expert opt-in only for controlled performance experiments.
+- Keep `B2` as the primary expert opt-in profile for broad workloads.
+- Use `B3` as an additional expert opt-in for scripted `smac-hard` when validated in your deployment.
 - Keep `B4` experimental-only with explicit `allow_experimental_transport=True`.
 
 ## Migration

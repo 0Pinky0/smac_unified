@@ -211,3 +211,28 @@ def test_split_raw_units_preserves_enemy_observed_order_for_slot_mapping():
     assert [u.tag for u in enemies] == [103, 101, 102]
     assert env._last_split_probe['enemies_sorted_tags'] == [103, 101, 102]
 
+
+def test_split_raw_units_prefers_opponent_observation_for_enemy_team():
+    env = SMACEnv(variant='smac-hard', map_name='3m')
+    env.enemy_mask = np.asarray([1.0, 1.0, 1.0], dtype=np.float32)
+    ally_obs_units = [
+        _RawUnit(owner=1, unit_type=1, x=1, y=1, health=45, health_max=45, tag=1),
+        _RawUnit(owner=1, unit_type=1, x=2, y=1, health=45, health_max=45, tag=2),
+        _RawUnit(owner=1, unit_type=1, x=3, y=1, health=45, health_max=45, tag=3),
+        _RawUnit(owner=2, unit_type=1, x=9, y=1, health=45, health_max=45, tag=999),
+    ]
+    enemy_obs_units = [
+        _RawUnit(owner=2, unit_type=1, x=6, y=1, health=45, health_max=45, tag=101),
+        _RawUnit(owner=2, unit_type=1, x=7, y=1, health=45, health_max=45, tag=102),
+        _RawUnit(owner=2, unit_type=1, x=8, y=1, health=45, health_max=45, tag=103),
+    ]
+    env._obs = SimpleNamespace(
+        observation=SimpleNamespace(raw_data=SimpleNamespace(units=ally_obs_units))
+    )
+    env._opponent_obs = SimpleNamespace(
+        observation=SimpleNamespace(raw_data=SimpleNamespace(units=enemy_obs_units))
+    )
+    _, enemies = env._split_raw_units()
+    assert [u.tag for u in enemies] == [101, 102, 103]
+    assert env._last_split_probe['enemies_sorted_tags'] == [101, 102, 103]
+

@@ -84,6 +84,22 @@ TEST_FUNCTIONS = [
         'test_ability_selection_is_stable_with_unsupported_order_noise',
     ),
     (
+        'tests.test_action_parity',
+        'test_scripted_opponent_actions_require_runtime_in_scripted_mode',
+    ),
+    (
+        'tests.test_action_parity',
+        'test_scripted_opponent_actions_require_dual_controller_session',
+    ),
+    (
+        'tests.test_action_parity',
+        'test_scripted_opponent_actions_propagate_runtime_exceptions',
+    ),
+    (
+        'tests.test_action_parity',
+        'test_scripted_opponent_actions_validate_runtime_return_type',
+    ),
+    (
         'tests.test_obs_state_parity',
         'test_observation_handler_restores_structured_feature_toggles',
     ),
@@ -140,6 +156,10 @@ TEST_FUNCTIONS = [
         'test_split_raw_units_preserves_enemy_observed_order_for_slot_mapping',
     ),
     (
+        'tests.test_reset_capability_parity',
+        'test_split_raw_units_prefers_opponent_observation_for_enemy_team',
+    ),
+    (
         'tests.test_api_parity',
         'test_env_api_exposes_legacy_stats_and_metadata_fields',
     ),
@@ -182,6 +202,18 @@ TEST_FUNCTIONS = [
     (
         'tests.test_api_parity',
         'test_experimental_transport_flag_propagates_to_session_config',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_scripted_pool_raw_mode_enables_dual_controller_by_default',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_scripted_pool_raw_mode_binds_runtime_for_env_lifecycle',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_scripted_pool_map_spec_prefers_new_maps_for_overlap_maps',
     ),
     (
         'tests.test_validation_parity',

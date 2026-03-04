@@ -769,9 +769,17 @@ class SMACEnv:
         if self._obs is None:
             self._last_split_probe = {}
             return [], []
-        raw_units = list(self._obs.observation.raw_data.units)
-        allies = [u for u in raw_units if u.owner == 1]
-        enemies = [u for u in raw_units if u.owner == 2]
+        ally_units = list(self._obs.observation.raw_data.units)
+        enemy_units = []
+        if self._opponent_obs is not None:
+            enemy_units = list(self._opponent_obs.observation.raw_data.units)
+
+        allies = [u for u in ally_units if u.owner == 1]
+        # In dual-controller scripted mode, legacy SMAC-Hard tracks enemy slots from
+        # the second controller observation; keep the same source preference.
+        enemies = [u for u in enemy_units if u.owner == 2]
+        if not enemies:
+            enemies = [u for u in ally_units if u.owner == 2]
         allies_sorted = sorted(allies, key=attrgetter('unit_type', 'pos.x', 'pos.y'))
         # Legacy SMAC-family envs assign enemy IDs by observed raw order on reset,
         # then keep those IDs stable via tag updates; avoid per-step enemy sorting.

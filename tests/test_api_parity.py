@@ -6,6 +6,9 @@ import numpy as np
 
 from smac_unified import make_env
 from smac_unified.core import SMACEnv
+from smac_unified.core.sc2session import SC2SessionConfig, _build_map_spec
+from smac_unified.maps import get_map_params
+from smac_unified.players import ScriptedOpponentRuntime
 
 
 def test_env_api_exposes_legacy_stats_and_metadata_fields():
@@ -187,4 +190,52 @@ def test_experimental_transport_flag_propagates_to_session_config():
     assert cfg.ensure_available_actions is False
     assert cfg.allow_experimental_transport is True
     env.close()
+
+
+def test_scripted_pool_raw_mode_enables_dual_controller_by_default():
+    env = make_env(
+        family='smac-hard',
+        map_name='3m',
+        normalized_api=False,
+        backend_mode='native',
+    )
+    cfg = env._session.config
+    assert cfg.opponent_mode == 'scripted_pool'
+    assert cfg.enable_dual_controller is True
+    env.close()
+
+
+def test_scripted_pool_raw_mode_binds_runtime_for_env_lifecycle():
+    env = make_env(
+        family='smac-hard',
+        map_name='3m',
+        normalized_api=False,
+        backend_mode='native',
+    )
+    assert isinstance(env._opponent_runtime, ScriptedOpponentRuntime)
+    assert env._runtime_lifecycle_owner == 'env'
+    env.close()
+
+
+def test_scripted_pool_map_spec_prefers_new_maps_for_overlap_maps():
+    params = get_map_params('3m')
+    scripted_cfg = SC2SessionConfig(
+        map_name='3m',
+        map_params=params,
+        opponent_mode='scripted_pool',
+        enable_dual_controller=True,
+    )
+    scripted_map = _build_map_spec(scripted_cfg)
+    assert scripted_map.directory == 'new_maps'
+    assert scripted_map.filename == '3m'
+
+    computer_cfg = SC2SessionConfig(
+        map_name='3m',
+        map_params=params,
+        opponent_mode='sc2_computer',
+        enable_dual_controller=False,
+    )
+    computer_map = _build_map_spec(computer_cfg)
+    assert computer_map.directory == 'SMAC_Maps'
+    assert computer_map.filename == '3m'
 

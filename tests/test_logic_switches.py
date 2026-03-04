@@ -11,6 +11,7 @@ def test_default_switches_have_expected_modes():
     assert smacv2.capability_mode == 'none'
     assert smacv2.reward_positive_mode == 'clamp_zero'
     assert hard.action_mode == 'ability_augmented'
+    assert hard.opponent_mode == 'scripted_pool'
 
 
 def test_switch_overrides_apply_cleanly():
