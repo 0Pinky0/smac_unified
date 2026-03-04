@@ -123,12 +123,17 @@ class SC2EnvRawSession:
         if self._env is not None:
             return
         profile = str(self.config.transport_profile or 'B0').upper()
+        scripted_mode = self.config.opponent_mode == 'scripted_pool'
         if (
             profile == 'B4' or not bool(self.config.ensure_available_actions)
         ) and not bool(self.config.allow_experimental_transport):
             raise ValueError(
                 'Experimental transport requires allow_experimental_transport=True '
                 '(B4 or ensure_available_actions=False).'
+            )
+        if scripted_mode and not bool(self.config.enable_dual_controller):
+            raise ValueError(
+                'Scripted opponent mode requires enable_dual_controller=True.'
             )
         _ensure_pysc2_compat(self.config.source_root)
         register_maps()
@@ -149,7 +154,7 @@ class SC2EnvRawSession:
         )
 
         players: List[Any] = [sc2_env.Agent(race_agent)]
-        if self.config.opponent_mode == 'scripted_pool' and self.config.enable_dual_controller:
+        if scripted_mode and self.config.enable_dual_controller:
             players.append(sc2_env.Agent(race_enemy))
             self._num_agents = 2
         else:
@@ -169,6 +174,14 @@ class SC2EnvRawSession:
             reuse_step_observe_requests=self.config.reuse_step_observe_requests,
             version=self.config.game_version,
         )
+        if scripted_mode:
+            actual_agents = int(getattr(self._env, '_num_agents', self._num_agents))
+            if actual_agents != 2:
+                self.close()
+                raise RuntimeError(
+                    'Scripted opponent mode launch failed to enter '
+                    f'dual-controller setup: num_agents={actual_agents}.'
+                )
 
     def reset(self):
         if self._env is None:

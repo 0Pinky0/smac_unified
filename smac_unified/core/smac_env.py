@@ -242,6 +242,7 @@ class SMACEnv:
         self._last_split_probe: dict[str, Any] = {}
 
     def _build_session(self) -> SC2EnvRawSession:
+        dual_controller_default = self.switches.opponent_mode == 'scripted_pool'
         cfg = SC2SessionConfig(
             map_name=self.map_name,
             map_params=self.map_params,
@@ -265,7 +266,10 @@ class SMACEnv:
             allow_experimental_transport=self._allow_experimental_transport,
             opponent_mode=self.switches.opponent_mode,
             enable_dual_controller=bool(
-                self._native_options.get('enable_dual_controller', False)
+                self._native_options.get(
+                    'enable_dual_controller',
+                    dual_controller_default,
+                )
             ),
             game_version=self._env_kwargs.get('game_version'),
             source_root=self._source_root,
