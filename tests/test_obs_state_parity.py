@@ -232,3 +232,66 @@ def test_state_handler_uses_center_relative_coordinates():
     assert np.isclose(ally_rel_x, (18.0 - center_x) / context.max_distance_x)
     assert np.isclose(ally_rel_y, (12.0 - center_y) / context.max_distance_y)
 
+
+def test_observation_handler_preserves_enemy_feature_layout():
+    env = _AvailEnv(
+        masks={
+            0: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+            1: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        }
+    )
+    context = _context(env=env)
+    frame = UnitFrame(
+        allies=_team(
+            [
+                _tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=40, shield=5, shield_max=5),
+                _tracked(unit_id=1, tag=2, unit_type=1, x=6, y=4, health=45),
+            ]
+        ),
+        enemies=_team([_tracked(unit_id=0, tag=101, unit_type=1, x=8, y=4, health=35)]),
+        prev_allies_health=np.asarray([40.0, 45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([5.0, 0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([35.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=5,
+    )
+    obs = DefaultObservationHandler().build_agent_obs(frame=frame, context=context, agent_id=0)
+
+    move_dim = 4 + 8 + 9
+    enemy_slot0 = move_dim
+    sight_range = 9.0
+    assert obs[enemy_slot0] == 1.0
+    assert np.isclose(obs[enemy_slot0 + 1], 4.0 / sight_range)
+    assert np.isclose(obs[enemy_slot0 + 2], 4.0 / sight_range)
+    assert np.isclose(obs[enemy_slot0 + 3], 0.0)
+
+
+def test_state_handler_preserves_flattened_team_layout():
+    env = _AvailEnv(
+        masks={
+            0: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+            1: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        }
+    )
+    context = _context(env=env)
+    frame = UnitFrame(
+        allies=_team(
+            [
+                _tracked(unit_id=0, tag=1, unit_type=2, x=4, y=4, health=40, shield=5, shield_max=5),
+                _tracked(unit_id=1, tag=2, unit_type=1, x=6, y=4, health=45),
+            ]
+        ),
+        enemies=_team([_tracked(unit_id=0, tag=101, unit_type=1, x=8, y=4, health=35)]),
+        prev_allies_health=np.asarray([40.0, 45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([5.0, 0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([35.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=6,
+    )
+    state = DefaultStateHandler().build_state(frame=frame, context=context)
+
+    ally_attr = 4 + context.shield_bits_ally + context.unit_type_bits
+    enemy_offset = context.n_agents * ally_attr
+    assert np.isclose(state[0], 40.0 / 45.0)
+    assert np.isclose(state[enemy_offset], 35.0 / 45.0)
+

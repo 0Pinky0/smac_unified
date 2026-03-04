@@ -84,6 +84,14 @@ TEST_FUNCTIONS = [
         'test_state_handler_uses_center_relative_coordinates',
     ),
     (
+        'tests.test_obs_state_parity',
+        'test_observation_handler_preserves_enemy_feature_layout',
+    ),
+    (
+        'tests.test_obs_state_parity',
+        'test_state_handler_preserves_flattened_team_layout',
+    ),
+    (
         'tests.test_reward_outcome_parity',
         'test_step_scales_terminal_reward_after_win_bonus',
     ),

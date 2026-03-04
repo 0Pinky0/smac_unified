@@ -19,32 +19,54 @@ class DefaultStateHandler(StateHandler):
 
         ally_attr = 4 + context.shield_bits_ally + context.unit_type_bits
         enemy_attr = 3 + context.shield_bits_enemy + context.unit_type_bits
-        ally_state = np.zeros((context.n_agents, ally_attr), dtype=np.float32)
-        enemy_state = np.zeros((context.n_enemies, enemy_attr), dtype=np.float32)
+        ally_size = context.n_agents * ally_attr
+        enemy_size = context.n_enemies * enemy_attr
+        last_action_size = (
+            context.n_agents * context.n_actions if context.state_last_action else 0
+        )
+        timestep_size = 1 if context.state_timestep_number else 0
+        state = np.zeros(
+            ally_size + enemy_size + last_action_size + timestep_size,
+            dtype=np.float32,
+        )
         center_x = context.map_x / 2.0
         center_y = context.map_y / 2.0
 
         for unit in frame.allies.units:
-            ally_state[unit.unit_id, :] = _ally_state_row(
+            if unit.unit_id < 0 or unit.unit_id >= context.n_agents:
+                continue
+            row_start = unit.unit_id * ally_attr
+            _write_ally_state_row(
+                out=state,
+                start=row_start,
                 unit=unit,
                 context=context,
                 center_x=center_x,
                 center_y=center_y,
             )
         for unit in frame.enemies.units:
-            enemy_state[unit.unit_id, :] = _enemy_state_row(
+            if unit.unit_id < 0 or unit.unit_id >= context.n_enemies:
+                continue
+            row_start = ally_size + unit.unit_id * enemy_attr
+            _write_enemy_state_row(
+                out=state,
+                start=row_start,
                 unit=unit,
                 context=context,
                 center_x=center_x,
                 center_y=center_y,
             )
 
-        chunks = [ally_state.flatten(), enemy_state.flatten()]
+        cursor = ally_size + enemy_size
         if context.state_last_action:
-            chunks.append(np.asarray(context.last_action, dtype=np.float32).flatten())
+            state[cursor : cursor + last_action_size] = np.asarray(
+                context.last_action,
+                dtype=np.float32,
+            ).reshape(-1)
+            cursor += last_action_size
         if context.state_timestep_number:
-            chunks.append(np.asarray([_timestep_ratio(context)], dtype=np.float32))
-        return np.concatenate(chunks, axis=0).astype(np.float32)
+            state[cursor] = _timestep_ratio(context)
+        return state
 
 
 class CapabilityStateHandler(DefaultStateHandler):
@@ -71,49 +93,52 @@ class CapabilityStateHandler(DefaultStateHandler):
         return np.concatenate((base, np.asarray(extras, dtype=np.float32)), axis=0)
 
 
-def _ally_state_row(
+def _write_ally_state_row(
     *,
+    out: np.ndarray,
+    start: int,
     unit: TrackedUnit,
     context: HandlerContext,
     center_x: float,
     center_y: float,
-) -> np.ndarray:
-    row = np.zeros(4 + context.shield_bits_ally + context.unit_type_bits, dtype=np.float32)
-    row[0] = unit.health / max(unit.health_max, 1.0)
-    row[1] = unit.weapon_cooldown / max(_unit_max_cooldown(unit=unit, context=context), 1.0)
-    row[2] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
-    row[3] = (unit.y - center_y) / max(context.max_distance_y, 1.0)
+) -> None:
+    out[start] = unit.health / max(unit.health_max, 1.0)
+    out[start + 1] = unit.weapon_cooldown / max(
+        _unit_max_cooldown(unit=unit, context=context),
+        1.0,
+    )
+    out[start + 2] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
+    out[start + 3] = (unit.y - center_y) / max(context.max_distance_y, 1.0)
     cursor = 4
     if context.shield_bits_ally > 0:
-        row[cursor] = unit.shield / max(unit.shield_max, 1.0)
+        out[start + cursor] = unit.shield / max(unit.shield_max, 1.0)
         cursor += 1
     if context.unit_type_bits > 0:
         idx = _unit_type_index(unit=unit, context=context)
         if 0 <= idx < context.unit_type_bits:
-            row[cursor + idx] = 1.0
-    return row
+            out[start + cursor + idx] = 1.0
 
 
-def _enemy_state_row(
+def _write_enemy_state_row(
     *,
+    out: np.ndarray,
+    start: int,
     unit: TrackedUnit,
     context: HandlerContext,
     center_x: float,
     center_y: float,
-) -> np.ndarray:
-    row = np.zeros(3 + context.shield_bits_enemy + context.unit_type_bits, dtype=np.float32)
-    row[0] = unit.health / max(unit.health_max, 1.0)
-    row[1] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
-    row[2] = (unit.y - center_y) / max(context.max_distance_y, 1.0)
+) -> None:
+    out[start] = unit.health / max(unit.health_max, 1.0)
+    out[start + 1] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
+    out[start + 2] = (unit.y - center_y) / max(context.max_distance_y, 1.0)
     cursor = 3
     if context.shield_bits_enemy > 0:
-        row[cursor] = unit.shield / max(unit.shield_max, 1.0)
+        out[start + cursor] = unit.shield / max(unit.shield_max, 1.0)
         cursor += 1
     if context.unit_type_bits > 0:
         idx = _unit_type_index(unit=unit, context=context)
         if 0 <= idx < context.unit_type_bits:
-            row[cursor + idx] = 1.0
-    return row
+            out[start + cursor + idx] = 1.0
 
 
 def _unit_type_index(*, unit: TrackedUnit, context: HandlerContext) -> int:

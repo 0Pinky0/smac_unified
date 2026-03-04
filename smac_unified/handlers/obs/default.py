@@ -22,9 +22,9 @@ class DefaultObservationHandler(ObservationHandler):
             + own_dim
             + (1 if context.obs_timestep_number else 0)
         )
+        obs = np.zeros(total, dtype=np.float32)
         unit = frame.allies.units[agent_id]
         if not unit.alive:
-            obs = np.zeros(total, dtype=np.float32)
             if context.obs_timestep_number:
                 obs[-1] = _timestep_ratio(context)
             return obs
@@ -35,7 +35,19 @@ class DefaultObservationHandler(ObservationHandler):
             else [0] * context.n_actions
         )
 
-        move_feats = np.zeros(move_dim, dtype=np.float32)
+        cursor = 0
+        move_start = cursor
+        cursor += move_dim
+        enemy_start = cursor
+        cursor += context.attack_slots * enemy_dim
+        ally_slots = max(context.n_agents - 1, 1)
+        ally_start = cursor
+        cursor += ally_slots * ally_dim
+        own_start = cursor
+        cursor += own_dim
+        timestep_idx = cursor if context.obs_timestep_number else -1
+
+        move_feats = obs[move_start : move_start + move_dim]
         move_feats[:4] = np.asarray(avail[2:6], dtype=np.float32)
         idx = 4
         if context.obs_pathing_grid:
@@ -44,7 +56,6 @@ class DefaultObservationHandler(ObservationHandler):
         if context.obs_terrain_height:
             move_feats[idx : idx + 9] = _surrounding_height(unit=unit, context=context)
 
-        enemy_feats = np.zeros((context.attack_slots, enemy_dim), dtype=np.float32)
         enemies = list(frame.enemies.units)[: context.attack_slots]
         sight_range = _unit_sight_range(agent_id=agent_id, frame=frame, context=context)
         for slot, enemy in enumerate(enemies):
@@ -53,95 +64,89 @@ class DefaultObservationHandler(ObservationHandler):
             dist = _distance(unit.x, unit.y, enemy.x, enemy.y)
             if dist > sight_range:
                 continue
-            cursor = 0
+            slot_start = enemy_start + slot * enemy_dim
+            feat_cursor = slot_start
             action_id = context.n_actions_no_attack + slot
             if action_id < len(avail):
-                enemy_feats[slot, cursor] = float(avail[action_id])
-            cursor += 1
-            enemy_feats[slot, cursor] = dist / max(sight_range, 1.0)
-            cursor += 1
-            enemy_feats[slot, cursor] = (enemy.x - unit.x) / max(sight_range, 1.0)
-            cursor += 1
-            enemy_feats[slot, cursor] = (enemy.y - unit.y) / max(sight_range, 1.0)
-            cursor += 1
+                obs[feat_cursor] = float(avail[action_id])
+            feat_cursor += 1
+            obs[feat_cursor] = dist / max(sight_range, 1.0)
+            feat_cursor += 1
+            obs[feat_cursor] = (enemy.x - unit.x) / max(sight_range, 1.0)
+            feat_cursor += 1
+            obs[feat_cursor] = (enemy.y - unit.y) / max(sight_range, 1.0)
+            feat_cursor += 1
             if context.obs_all_health:
-                enemy_feats[slot, cursor] = enemy.health / max(enemy.health_max, 1.0)
-                cursor += 1
+                obs[feat_cursor] = enemy.health / max(enemy.health_max, 1.0)
+                feat_cursor += 1
                 if context.shield_bits_enemy > 0:
-                    enemy_feats[slot, cursor] = enemy.shield / max(enemy.shield_max, 1.0)
-                    cursor += 1
+                    obs[feat_cursor] = enemy.shield / max(enemy.shield_max, 1.0)
+                    feat_cursor += 1
             if context.unit_type_bits > 0:
                 unit_type_idx = _unit_type_index(unit=enemy, context=context, ally=False)
                 if 0 <= unit_type_idx < context.unit_type_bits:
-                    enemy_feats[slot, cursor + unit_type_idx] = 1.0
+                    obs[feat_cursor + unit_type_idx] = 1.0
 
-        ally_feats = np.zeros((max(context.n_agents - 1, 1), ally_dim), dtype=np.float32)
         ally_slot = 0
         for ally in frame.allies.units:
             if ally.unit_id == agent_id:
                 continue
-            if ally_slot >= ally_feats.shape[0]:
+            if ally_slot >= ally_slots:
                 break
-            cursor = 0
+            slot_start = ally_start + ally_slot * ally_dim
+            feat_cursor = slot_start
             if ally.alive:
                 dist = _distance(unit.x, unit.y, ally.x, ally.y)
                 if dist <= sight_range:
-                    ally_feats[ally_slot, cursor] = 1.0
-                    cursor += 1
-                    ally_feats[ally_slot, cursor] = dist / max(sight_range, 1.0)
-                    cursor += 1
-                    ally_feats[ally_slot, cursor] = (ally.x - unit.x) / max(
+                    obs[feat_cursor] = 1.0
+                    feat_cursor += 1
+                    obs[feat_cursor] = dist / max(sight_range, 1.0)
+                    feat_cursor += 1
+                    obs[feat_cursor] = (ally.x - unit.x) / max(
                         sight_range,
                         1.0,
                     )
-                    cursor += 1
-                    ally_feats[ally_slot, cursor] = (ally.y - unit.y) / max(
+                    feat_cursor += 1
+                    obs[feat_cursor] = (ally.y - unit.y) / max(
                         sight_range,
                         1.0,
                     )
-                    cursor += 1
+                    feat_cursor += 1
                     if context.obs_all_health:
-                        ally_feats[ally_slot, cursor] = ally.health / max(ally.health_max, 1.0)
-                        cursor += 1
+                        obs[feat_cursor] = ally.health / max(ally.health_max, 1.0)
+                        feat_cursor += 1
                         if context.shield_bits_ally > 0:
-                            ally_feats[ally_slot, cursor] = ally.shield / max(
+                            obs[feat_cursor] = ally.shield / max(
                                 ally.shield_max,
                                 1.0,
                             )
-                            cursor += 1
+                            feat_cursor += 1
                     if context.unit_type_bits > 0:
                         unit_type_idx = _unit_type_index(unit=ally, context=context, ally=True)
                         if 0 <= unit_type_idx < context.unit_type_bits:
-                            ally_feats[ally_slot, cursor + unit_type_idx] = 1.0
-                    cursor += context.unit_type_bits
+                            obs[feat_cursor + unit_type_idx] = 1.0
+                    feat_cursor += context.unit_type_bits
                     if context.obs_last_action and ally.unit_id < context.last_action.shape[0]:
-                        ally_feats[ally_slot, cursor : cursor + context.n_actions] = context.last_action[
+                        obs[feat_cursor : feat_cursor + context.n_actions] = context.last_action[
                             ally.unit_id
                         ]
             ally_slot += 1
 
-        own_feats = np.zeros(own_dim, dtype=np.float32)
-        cursor = 0
+        own_feats = obs[own_start : own_start + own_dim]
+        own_cursor = 0
         if context.obs_own_health:
-            own_feats[cursor] = unit.health / max(unit.health_max, 1.0)
-            cursor += 1
+            own_feats[own_cursor] = unit.health / max(unit.health_max, 1.0)
+            own_cursor += 1
             if context.shield_bits_ally > 0:
-                own_feats[cursor] = unit.shield / max(unit.shield_max, 1.0)
-                cursor += 1
+                own_feats[own_cursor] = unit.shield / max(unit.shield_max, 1.0)
+                own_cursor += 1
         if context.unit_type_bits > 0:
             unit_type_idx = _unit_type_index(unit=unit, context=context, ally=True)
             if 0 <= unit_type_idx < context.unit_type_bits:
-                own_feats[cursor + unit_type_idx] = 1.0
-
-        chunks = [
-            move_feats.flatten(),
-            enemy_feats.flatten(),
-            ally_feats.flatten(),
-            own_feats.flatten(),
-        ]
+                own_feats[own_cursor + unit_type_idx] = 1.0
         if context.obs_timestep_number:
-            chunks.append(np.asarray([_timestep_ratio(context)], dtype=np.float32))
-        return np.concatenate(chunks, axis=0).astype(np.float32)
+            obs[timestep_idx] = _timestep_ratio(context)
+        return obs
 
     def build_obs(
         self,
