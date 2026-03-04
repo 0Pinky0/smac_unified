@@ -80,7 +80,36 @@ Native backend starts with conservative defaults:
 - `pipeline_step_and_observe=False`
 - `reuse_step_observe_requests=False`
 
-Pass `native_options={...}` for expert overrides.
+You can also use explicit transport profiles:
+
+- `B0`: defaults
+- `B1`: `reuse_step_observe_requests=True`
+- `B2`: `B1 + pipeline_step_and_observe=True`
+- `B3`: `B2 + pipeline_actions_and_step=True`
+- `B4`: `B3 + ensure_available_actions=False` (experimental)
+
+```python
+env = make_env(
+    family="smac",
+    map_name="3m",
+    backend_mode="native",
+    transport_profile="B2",
+)
+```
+
+`B4` (or any path with `ensure_available_actions=False`) is safety-guarded and requires explicit opt-in:
+
+```python
+env = make_env(
+    family="smac",
+    map_name="3m",
+    backend_mode="native",
+    transport_profile="B4",
+    allow_experimental_transport=True,
+)
+```
+
+Pass `native_options={...}` for expert overrides. Explicit `native_options` values override profile defaults deterministically.
 
 ## Unified Handler Model
 
@@ -143,33 +172,51 @@ These validate:
 - scripted runtime compatibility wrapping,
 - native vs bridge core stepping sanity on baseline maps.
 
-`native_core_validation.py` now runs a deterministic bridge-first action trace and replays it on native mode, then compares traces with combined `atol+rtol` tolerance checks and strict key/step alignment. The generated `tools/native_core_validation.json` report includes parity diagnostics and SPS metrics (`cold_sps` + `steady_sps`) with repeat/latency support.
+`native_core_validation.py` runs a deterministic bridge-first action trace and replays it on native mode, then compares traces with combined `atol+rtol` tolerance checks and strict key/step alignment. The generated `tools/native_core_validation.json` report includes parity diagnostics and SPS metrics (`cold_sps` + `steady_sps`) with repeat/latency support.
 
-For `steady` profile, parity comparison defaults to an early deterministic window (`--steady-parity-steps 3`) so long-horizon SPS runs remain performance-focused. Set `--steady-parity-steps 0` for strict full-trace parity.
+For `steady` profile:
+- default mode is windowed parity (`--steady-parity-steps 3`) for fast SPS iteration;
+- strict long-horizon mode is first-class via `--steady-parity-mode strict` (full trace compare, equivalent to `--steady-parity-steps 0`).
+
+Strict baseline gate example:
+
+```bash
+conda run -n smacnt python tools/native_core_validation.py \
+  --profile steady \
+  --steady-steps 300 \
+  --steady-warmup-steps 30 \
+  --steady-parity-mode strict \
+  --repeats 2 \
+  --assert-parity \
+  --output-json tools/native_core_validation_transport_b0.json
+```
+
+Strict transport matrix commands (`B0`-`B4`):
+
+```bash
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --output-json tools/native_core_validation_transport_b0.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --output-json tools/native_core_validation_transport_b1.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --pipeline-step-and-observe true --output-json tools/native_core_validation_transport_b2.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --pipeline-step-and-observe true --pipeline-actions-and-step true --output-json tools/native_core_validation_transport_b3.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --pipeline-step-and-observe true --pipeline-actions-and-step true --ensure-available-actions false --output-json tools/native_core_validation_transport_b4.json
+```
 
 ## SPS Rollout Decisions
 
-Transport matrix (steady profile, parity-gated):
+Strict full-trace matrix (`steady`, repeats=`2`, `--steady-parity-mode strict`) outcome:
 
-- `B0`: defaults
-- `B1`: `reuse_step_observe_requests=True`
-- `B2`: `B1 + pipeline_step_and_observe=True`
-- `B3`: `B2 + pipeline_actions_and_step=True`
-- `B4`: `B3 + ensure_available_actions=False` (experimental)
-
-Observed steady native SPS (`smac`, `smacv2`, `smac-hard`):
-
-- `B0`: `1047`, `823`, `926`
-- `B1`: `973`, `823`, `851`
-- `B2`: `1440`, `858`, `1316`  **best throughput**
-- `B3`: `821`, `730`, `894`
-- `B4`: `879`, `754`, `794`
+- `B0`: strict parity failed on all families; first divergence `obs_head@step4`.
+- `B1`: strict parity failed on all families; first divergence `obs_head@step4`.
+- `B2`: strict parity failed on all families; first divergence `obs_head@step4`; highest median steady SPS (`smac=1361`, `smacv2=1164`, `smac-hard=1252`).
+- `B3`: strict parity failed on all families; first divergence `obs_head@step4`.
+- `B4`: native strict runs are blocked by the experimental transport safety guard unless `allow_experimental_transport=True`, and matrix runs without opt-in report `run_failed`.
 
 Rollout policy:
 
 - Keep conservative runtime defaults unchanged.
-- Keep `B2` as an expert opt-in via `native_options` because it has the best SPS but is a higher-performance transport profile.
-- Keep `B4` non-default experimental only (`ensure_available_actions=False`).
+- Do **not** promote `B2` to default until strict long-horizon parity passes.
+- Keep `B2` as expert opt-in only for controlled performance experiments.
+- Keep `B4` experimental-only with explicit `allow_experimental_transport=True`.
 
 ## Migration
 
