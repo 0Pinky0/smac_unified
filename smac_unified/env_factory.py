@@ -4,15 +4,8 @@ from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Mapping, Optional
 
 from .adapters import NormalizedEnvAdapter
-from .backends import (
-    BackendConfig,
-    BackendRegistry,
-    NativeUnifiedBackend,
-    SmacBridgeBackend,
-    SmacHardBridgeBackend,
-    SmacV2BridgeBackend,
-)
 from .config import VariantSwitches, default_switches
+from .core import SMACEnv
 from .players import (
     EngineBotOpponentRuntime,
     OpponentRuntime,
@@ -40,17 +33,6 @@ _TRANSPORT_PROFILE_OPTIONS: dict[str, dict[str, bool]] = {
 }
 
 
-def build_default_backend_registry() -> BackendRegistry:
-    registry = BackendRegistry()
-    registry.register(NativeUnifiedBackend('smac'))
-    registry.register(NativeUnifiedBackend('smacv2'))
-    registry.register(NativeUnifiedBackend('smac-hard'))
-    registry.register(SmacBridgeBackend())
-    registry.register(SmacV2BridgeBackend())
-    registry.register(SmacHardBridgeBackend())
-    return registry
-
-
 @dataclass
 class EnvFactoryConfig:
     family: str
@@ -62,13 +44,11 @@ class EnvFactoryConfig:
     # Preferred explicit env kwargs.
     env_kwargs: Dict[str, Any] = field(default_factory=dict)
     source_root: str | None = None
-    backend_mode: str = 'native'
+    backend_mode: str = 'native'  # retained for explicit native-only validation
     transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None
     allow_experimental_transport: bool = False
-    backend_registry: BackendRegistry | None = None
     logic_switches: Dict[str, str] = field(default_factory=dict)
     native_options: Dict[str, Any] = field(default_factory=dict)
-    bridge_options: Dict[str, Any] = field(default_factory=dict)
     observation_handler: Any | None = None
     state_handler: Any | None = None
     reward_handler: Any | None = None
@@ -122,10 +102,8 @@ def make_env(
     backend_mode: str = 'native',
     transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None,
     allow_experimental_transport: bool = False,
-    backend_registry: BackendRegistry | None = None,
     logic_switches: Mapping[str, str] | None = None,
     native_options: Mapping[str, Any] | None = None,
-    bridge_options: Mapping[str, Any] | None = None,
     observation_handler: Any | None = None,
     state_handler: Any | None = None,
     reward_handler: Any | None = None,
@@ -134,7 +112,11 @@ def make_env(
     opponent_config: Mapping[str, Any] | None = None,
     **kwargs,
 ):
-    registry = backend_registry or build_default_backend_registry()
+    if str(backend_mode).lower() != 'native':
+        raise ValueError(
+            "Only native backend is supported in production. "
+            "Bridge/auto backends have been removed from runtime API."
+        )
     switches = default_switches(family)
     if logic_switches:
         switches = VariantSwitches(
@@ -168,26 +150,30 @@ def make_env(
         native_options=native_options,
     )
 
-    backend_config = BackendConfig(
-        family=family,
+    env_kwargs = dict(kwargs)
+    if switches is not None:
+        env_kwargs.setdefault('logic_switches', switches)
+    handler_map = {
+        'action_handler': 'action_handler',
+        'observation_handler': 'observation_handler',
+        'state_handler': 'state_handler',
+        'reward_handler': 'reward_handler',
+    }
+    for src_key, dst_key in handler_map.items():
+        value = handler_overrides.get(src_key)
+        if value is not None:
+            env_kwargs[dst_key] = value
+
+    env = SMACEnv(
+        variant=family,
         map_name=map_name,
         capability_config=capability_config,
-        env_kwargs=dict(kwargs),
+        env_kwargs=env_kwargs,
         source_root=source_root,
-        backend_mode=backend_mode,
         native_options=resolved_native_options,
-        bridge_options=dict(bridge_options or {}),
         transport_profile=resolved_transport_profile,
         allow_experimental_transport=bool(allow_experimental_transport),
-        logic_switches=switches,
-        handler_overrides=handler_overrides,
     )
-    backend = registry.get(
-        family,
-        mode=backend_mode,
-        config=backend_config,
-    )
-    env = backend.make_env(backend_config)
     runtime = opponent_runtime or _default_opponent_runtime(
         family,
         switches,
@@ -222,10 +208,8 @@ class UnifiedFactory:
             backend_mode=config.backend_mode,
             transport_profile=config.transport_profile,
             allow_experimental_transport=config.allow_experimental_transport,
-            backend_registry=config.backend_registry,
             logic_switches=config.logic_switches,
             native_options=config.native_options,
-            bridge_options=config.bridge_options,
             observation_handler=config.observation_handler,
             state_handler=config.state_handler,
             reward_handler=config.reward_handler,

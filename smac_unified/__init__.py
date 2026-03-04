@@ -39,10 +39,8 @@ from .config import (
     merge_switches,
 )
 from .env_factory import (
-    BackendConfig,
     EnvFactoryConfig,
     UnifiedFactory,
-    build_default_backend_registry,
     make_env,
 )
 from .core import (
@@ -63,7 +61,6 @@ from .players import (
 from .types import StepBatch
 
 __all__ = [
-    'BackendConfig',
     'AbilityAugmentedActionHandler',
     'AbsolutePositiveRewardHandler',
     'ActionHandler',
@@ -108,7 +105,6 @@ __all__ = [
     'UnifiedFactory',
     'VariantName',
     'VariantSwitches',
-    'build_default_backend_registry',
     'build_default_handler_bundle',
     'default_switches',
     'entries_for_block',
