@@ -407,25 +407,61 @@ def _compare_case_pair(
         'mismatch_count': 0,
         'mismatches': [],
         'mismatch_field_counts': {},
+        'mismatch_step_counts': {},
         'first_mismatch_step': -1,
         'first_mismatch_field': '',
+        'first_mismatch_detail': {},
     }
     field_counts: dict[str, int] = {}
+    step_counts: dict[str, int] = {}
 
-    def _record_mismatch(*, field: str, message: str, step: int = -1) -> None:
+    def _preview_value(value: Any) -> Any:
+        if isinstance(value, list):
+            if value and isinstance(value[0], list):
+                outer = min(len(value), 3)
+                return [list(row)[:8] for row in value[:outer]]
+            return list(value)[:8]
+        return value
+
+    def _record_mismatch(
+        *,
+        field: str,
+        message: str,
+        step: int = -1,
+        native_value: Any = None,
+        bridge_value: Any = None,
+    ) -> None:
         field_key = str(field or 'unknown')
         field_counts[field_key] = int(field_counts.get(field_key, 0)) + 1
+        if int(step) >= 0:
+            step_key = str(int(step))
+            step_counts[step_key] = int(step_counts.get(step_key, 0)) + 1
         if payload.get('first_mismatch_field', '') == '':
             payload['first_mismatch_field'] = field_key
             payload['first_mismatch_step'] = int(step)
+            payload['first_mismatch_detail'] = {
+                'field': field_key,
+                'step': int(step),
+                'native': _preview_value(native_value),
+                'bridge': _preview_value(bridge_value),
+            }
         mismatches.append(message)
 
     if not native.ok or not bridge.ok:
         payload['mismatches'] = ['native/bridge run failed; trace compare skipped']
         payload['mismatch_count'] = 1
         payload['mismatch_field_counts'] = {'run_failed': 1}
+        payload['mismatch_step_counts'] = {}
         payload['first_mismatch_step'] = -1
         payload['first_mismatch_field'] = 'run_failed'
+        payload['first_mismatch_detail'] = {
+            'field': 'run_failed',
+            'step': -1,
+            'native_ok': bool(native.ok),
+            'bridge_ok': bool(bridge.ok),
+            'native_error': str(native.error or ''),
+            'bridge_error': str(bridge.error or ''),
+        }
         return payload
     native_trace = native.trace or []
     bridge_trace = bridge.trace or []
@@ -433,8 +469,15 @@ def _compare_case_pair(
         payload['mismatches'] = ['native/bridge trace missing']
         payload['mismatch_count'] = 1
         payload['mismatch_field_counts'] = {'trace_missing': 1}
+        payload['mismatch_step_counts'] = {}
         payload['first_mismatch_step'] = -1
         payload['first_mismatch_field'] = 'trace_missing'
+        payload['first_mismatch_detail'] = {
+            'field': 'trace_missing',
+            'step': -1,
+            'native_trace_len': int(len(native_trace)),
+            'bridge_trace_len': int(len(bridge_trace)),
+        }
         return payload
 
     steps = min(len(native_trace), len(bridge_trace))
@@ -449,6 +492,8 @@ def _compare_case_pair(
                 f'trace length mismatch native={len(native_trace)} '
                 f'bridge={len(bridge_trace)}'
             ),
+            native_value=len(native_trace),
+            bridge_value=len(bridge_trace),
         )
     for step_idx in range(steps):
         lhs = native_trace[step_idx]
@@ -460,12 +505,16 @@ def _compare_case_pair(
                 field='trace_keys',
                 step=step_idx,
                 message=f'step {step_idx}: native trace missing keys {lhs_missing}',
+                native_value=lhs_missing,
+                bridge_value=[],
             )
         if rhs_missing:
             _record_mismatch(
                 field='trace_keys',
                 step=step_idx,
                 message=f'step {step_idx}: bridge trace missing keys {rhs_missing}',
+                native_value=[],
+                bridge_value=rhs_missing,
             )
         if lhs.get('step') != rhs.get('step'):
             _record_mismatch(
@@ -475,12 +524,16 @@ def _compare_case_pair(
                     f"step {step_idx}: step id mismatch native={lhs.get('step')} "
                     f"bridge={rhs.get('step')}"
                 ),
+                native_value=lhs.get('step'),
+                bridge_value=rhs.get('step'),
             )
         if lhs.get('actions') != rhs.get('actions'):
             _record_mismatch(
                 field='actions',
                 step=step_idx,
                 message=f'step {step_idx}: actions mismatch',
+                native_value=lhs.get('actions'),
+                bridge_value=rhs.get('actions'),
             )
         if not _float_close(
             lhs.get('reward', 0.0),
@@ -495,6 +548,8 @@ def _compare_case_pair(
                     f"step {step_idx}: reward mismatch native={lhs.get('reward')} "
                     f"bridge={rhs.get('reward')}"
                 ),
+                native_value=lhs.get('reward'),
+                bridge_value=rhs.get('reward'),
             )
         for key in ('terminated', 'battle_won', 'episode_limit', 'dead_allies', 'dead_enemies'):
             if lhs.get(key) != rhs.get(key):
@@ -502,24 +557,32 @@ def _compare_case_pair(
                     field=key,
                     step=step_idx,
                     message=f'step {step_idx}: {key} mismatch',
+                    native_value=lhs.get(key),
+                    bridge_value=rhs.get(key),
                 )
         if list(lhs.get('obs_shape', [])) != list(rhs.get('obs_shape', [])):
             _record_mismatch(
                 field='obs_shape',
                 step=step_idx,
                 message=f'step {step_idx}: obs_shape mismatch',
+                native_value=lhs.get('obs_shape', []),
+                bridge_value=rhs.get('obs_shape', []),
             )
         if list(lhs.get('state_shape', [])) != list(rhs.get('state_shape', [])):
             _record_mismatch(
                 field='state_shape',
                 step=step_idx,
                 message=f'step {step_idx}: state_shape mismatch',
+                native_value=lhs.get('state_shape', []),
+                bridge_value=rhs.get('state_shape', []),
             )
         if lhs.get('avail_actions') != rhs.get('avail_actions'):
             _record_mismatch(
                 field='avail_actions',
                 step=step_idx,
                 message=f'step {step_idx}: avail_actions mismatch',
+                native_value=lhs.get('avail_actions', []),
+                bridge_value=rhs.get('avail_actions', []),
             )
         if not _vector_close(
             lhs.get('obs_head', []),
@@ -531,6 +594,8 @@ def _compare_case_pair(
                 field='obs_head',
                 step=step_idx,
                 message=f'step {step_idx}: obs_head mismatch',
+                native_value=lhs.get('obs_head', []),
+                bridge_value=rhs.get('obs_head', []),
             )
         if not _vector_close(
             lhs.get('state_head', []),
@@ -542,6 +607,8 @@ def _compare_case_pair(
                 field='state_head',
                 step=step_idx,
                 message=f'step {step_idx}: state_head mismatch',
+                native_value=lhs.get('state_head', []),
+                bridge_value=rhs.get('state_head', []),
             )
         if len(mismatches) >= 20:
             mismatches.append('... additional mismatches truncated ...')
@@ -551,6 +618,7 @@ def _compare_case_pair(
     payload['mismatch_count'] = len(mismatches)
     payload['mismatches'] = mismatches
     payload['mismatch_field_counts'] = field_counts
+    payload['mismatch_step_counts'] = step_counts
     payload['ok'] = len(mismatches) == 0
     return payload
 
@@ -585,8 +653,15 @@ def _summarize_parity_by_profile(
                     'mismatch_count': 1,
                     'mismatches': ['missing native or bridge run'],
                     'mismatch_field_counts': {'missing_mode': 1},
+                    'mismatch_step_counts': {},
                     'first_mismatch_field': 'missing_mode',
                     'first_mismatch_step': -1,
+                    'first_mismatch_detail': {
+                        'field': 'missing_mode',
+                        'step': -1,
+                        'native_repeat_count': int(len(native_rows)),
+                        'bridge_repeat_count': int(len(bridge_rows)),
+                    },
                     'repeat_results': [],
                 }
                 continue
@@ -595,8 +670,10 @@ def _summarize_parity_by_profile(
             steps_compared = 0
             mismatches: list[str] = []
             mismatch_field_counts: dict[str, int] = {}
+            mismatch_step_counts: dict[str, int] = {}
             first_mismatch_field = ''
             first_mismatch_step = -1
+            first_mismatch_detail: dict[str, Any] = {}
             repeat_results: list[dict[str, Any]] = []
             for idx in range(pair_count):
                 native = native_rows[idx]
@@ -624,6 +701,9 @@ def _summarize_parity_by_profile(
                         'first_mismatch_step': int(
                             repeat_cmp.get('first_mismatch_step', -1)
                         ),
+                        'first_mismatch_detail': dict(
+                            repeat_cmp.get('first_mismatch_detail', {}) or {}
+                        ),
                     }
                 )
                 steps_compared += int(repeat_cmp.get('steps_compared', 0))
@@ -635,6 +715,13 @@ def _summarize_parity_by_profile(
                     mismatch_field_counts[field] = (
                         int(mismatch_field_counts.get(field, 0)) + int(count)
                     )
+                repeat_step_counts = dict(
+                    repeat_cmp.get('mismatch_step_counts', {}) or {}
+                )
+                for step_key, count in repeat_step_counts.items():
+                    mismatch_step_counts[step_key] = (
+                        int(mismatch_step_counts.get(step_key, 0)) + int(count)
+                    )
                 if not repeat_cmp.get('ok', False):
                     if first_mismatch_field == '':
                         first_mismatch_field = str(
@@ -642,6 +729,9 @@ def _summarize_parity_by_profile(
                         )
                         first_mismatch_step = int(
                             repeat_cmp.get('first_mismatch_step', -1)
+                        )
+                        first_mismatch_detail = dict(
+                            repeat_cmp.get('first_mismatch_detail', {}) or {}
                         )
                     for msg in repeat_cmp.get('mismatches', []):
                         if len(mismatches) >= 40:
@@ -655,6 +745,12 @@ def _summarize_parity_by_profile(
                 if first_mismatch_field == '':
                     first_mismatch_field = 'repeat_count'
                     first_mismatch_step = -1
+                    first_mismatch_detail = {
+                        'field': 'repeat_count',
+                        'step': -1,
+                        'native_repeat_count': int(len(native_rows)),
+                        'bridge_repeat_count': int(len(bridge_rows)),
+                    }
                 mismatches.append(
                     f"repeat-count mismatch native={len(native_rows)} bridge={len(bridge_rows)}"
                 )
@@ -666,8 +762,10 @@ def _summarize_parity_by_profile(
                 'mismatch_count': int(mismatch_count),
                 'mismatches': mismatches,
                 'mismatch_field_counts': mismatch_field_counts,
+                'mismatch_step_counts': mismatch_step_counts,
                 'first_mismatch_field': first_mismatch_field,
                 'first_mismatch_step': int(first_mismatch_step),
+                'first_mismatch_detail': first_mismatch_detail,
                 'repeat_results': repeat_results,
             }
         parity_by_profile[profile] = family_payload

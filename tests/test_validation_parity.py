@@ -4,6 +4,7 @@ from tools.native_core_validation import (
     CaseResult,
     _build_native_options,
     _compare_case_pair,
+    _effective_steady_parity_steps,
     _summarize,
     _summarize_parity_by_profile,
 )
@@ -521,4 +522,79 @@ def test_parity_summary_detects_repeat_count_mismatch():
     assert payload['ok'] is False
     assert payload['first_mismatch_field'] == 'repeat_count'
     assert payload['mismatch_field_counts']['repeat_count'] == 1
+
+
+def test_effective_steady_parity_steps_strict_forces_full_trace():
+    args = SimpleNamespace(
+        steady_parity_mode='strict',
+        steady_parity_steps=9,
+    )
+    assert _effective_steady_parity_steps(args) == 0
+    args.steady_parity_mode = 'windowed'
+    assert _effective_steady_parity_steps(args) == 9
+
+
+def test_parity_compare_reports_trace_length_and_missing_keys():
+    native_trace = [_trace_step(step=0), _trace_step(step=1)]
+    bridge_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            # state_head intentionally omitted
+            'avail_actions': [[0, 1]],
+        }
+    ]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert result['ok'] is False
+    assert result['first_mismatch_field'] in ('trace_length', 'trace_keys')
+    assert result['mismatch_field_counts'].get('trace_length', 0) >= 1
+    assert result['mismatch_field_counts'].get('trace_keys', 0) >= 1
+    assert result['first_mismatch_detail']
+
+
+def test_parity_compare_run_failed_includes_error_detail():
+    native = _case('native', [_trace_step(step=0)])
+    bridge = _case('bridge', [_trace_step(step=0)])
+    native.ok = False
+    native.error = 'native failed'
+    result = _compare_case_pair(
+        native=native,
+        bridge=bridge,
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert result['ok'] is False
+    assert result['first_mismatch_field'] == 'run_failed'
+    assert result['first_mismatch_detail']['native_error'] == 'native failed'
+
+
+def test_parity_compare_records_first_mismatch_detail_values():
+    native_trace = [_trace_step(step=0, reward=1.25)]
+    bridge_trace = [_trace_step(step=0, reward=0.5)]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert result['ok'] is False
+    detail = result['first_mismatch_detail']
+    assert detail['field'] == 'reward'
+    assert detail['step'] == 0
+    assert detail['native'] == 1.25
+    assert detail['bridge'] == 0.5
 

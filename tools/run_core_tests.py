@@ -203,6 +203,22 @@ TEST_FUNCTIONS = [
         'tests.test_validation_parity',
         'test_parity_summary_detects_repeat_count_mismatch',
     ),
+    (
+        'tests.test_validation_parity',
+        'test_effective_steady_parity_steps_strict_forces_full_trace',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_reports_trace_length_and_missing_keys',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_run_failed_includes_error_detail',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_records_first_mismatch_detail_values',
+    ),
 ]
 
 
