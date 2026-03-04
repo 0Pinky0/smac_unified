@@ -31,6 +31,18 @@ class _DummyEnv:
         self.closed = True
 
 
+class _FailingStepEnv(_DummyEnv):
+    def step_batch(self, actions):
+        del actions
+        raise RuntimeError(f'boom-step-{self.env_id}')
+
+
+class _FailingCloseEnv(_DummyEnv):
+    def close(self):
+        self.closed = True
+        raise RuntimeError(f'boom-close-{self.env_id}')
+
+
 def test_vector_env_pool_sync_mode_runs_reset_step_and_close():
     pool = VectorEnvPool(
         env_fns=[
@@ -84,3 +96,37 @@ def test_make_env_pool_offsets_seed_per_env_instance():
     assert len(infos) == 3
     assert all(int(info.get('n_agents', 0)) == 3 for info in infos)
     pool.close()
+
+
+def test_vector_env_pool_thread_mode_propagates_step_exceptions():
+    pool = VectorEnvPool(
+        env_fns=[
+            lambda: _DummyEnv(0),
+            lambda: _FailingStepEnv(1),
+        ],
+        mode='thread',
+    )
+    try:
+        pool.step_batch([[1], [1]])
+        raise AssertionError('Expected RuntimeError from failing thread env.')
+    except RuntimeError as exc:
+        assert 'boom-step-1' in str(exc)
+    finally:
+        pool.close()
+
+
+def test_vector_env_pool_close_aggregates_close_errors():
+    pool = VectorEnvPool(
+        env_fns=[
+            lambda: _FailingCloseEnv(2),
+            lambda: _FailingCloseEnv(3),
+        ],
+        mode='sync',
+    )
+    try:
+        pool.close()
+        raise AssertionError('Expected RuntimeError when one or more env close calls fail.')
+    except RuntimeError as exc:
+        text = str(exc)
+        assert 'boom-close-2' in text
+        assert 'boom-close-3' in text

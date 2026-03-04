@@ -1,4 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
+import time
 
 from smac_unified.core.sc2session import SC2EnvRawSession, SC2SessionConfig
 from smac_unified.maps import get_map_params
@@ -15,6 +16,16 @@ class _FakeSC2Env:
 
     def close(self):
         self.closed = True
+
+
+class _SlowFakeSC2Env(_FakeSC2Env):
+    def __init__(self, delay_s: float):
+        super().__init__()
+        self.delay_s = float(delay_s)
+
+    def step(self, payload):
+        time.sleep(self.delay_s)
+        return super().step(payload)
 
 
 def _session(*, enable_async_step: bool, num_agents: int = 1):
@@ -72,3 +83,27 @@ def test_session_rejects_submit_when_previous_step_is_pending():
     finally:
         session.collect_step()
         session.close()
+
+
+def test_session_collect_without_submit_raises_runtime_error():
+    session = _session(enable_async_step=False, num_agents=1)
+    try:
+        session.collect_step()
+        raise AssertionError('Expected RuntimeError for collect without submit.')
+    except RuntimeError as exc:
+        assert 'pending step' in str(exc)
+    finally:
+        session.close()
+
+
+def test_session_close_clears_pending_async_step_state():
+    session = _session(enable_async_step=True, num_agents=1)
+    slow_env = _SlowFakeSC2Env(delay_s=0.1)
+    session._env = slow_env
+    session.submit_step(agent_actions=[9])
+    assert session.has_pending_step is True
+    session.close()
+    assert session.has_pending_step is False
+    assert session._pending_step_future is None
+    assert session._step_executor is None
+    assert slow_env.closed is True

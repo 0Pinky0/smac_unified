@@ -222,9 +222,9 @@ def test_split_raw_units_prefers_opponent_observation_for_enemy_team():
         _RawUnit(owner=2, unit_type=1, x=9, y=1, health=45, health_max=45, tag=999),
     ]
     enemy_obs_units = [
+        _RawUnit(owner=2, unit_type=1, x=8, y=1, health=45, health_max=45, tag=103),
         _RawUnit(owner=2, unit_type=1, x=6, y=1, health=45, health_max=45, tag=101),
         _RawUnit(owner=2, unit_type=1, x=7, y=1, health=45, health_max=45, tag=102),
-        _RawUnit(owner=2, unit_type=1, x=8, y=1, health=45, health_max=45, tag=103),
     ]
     env._obs = SimpleNamespace(
         observation=SimpleNamespace(raw_data=SimpleNamespace(units=ally_obs_units))

@@ -4,6 +4,9 @@ from operator import attrgetter
 from typing import Any, Dict, List, Mapping, Sequence
 
 import numpy as np
+from s2clientprotocol import common_pb2 as sc_common
+from s2clientprotocol import raw_pb2 as r_pb
+from s2clientprotocol import sc2api_pb2 as sc_pb
 
 from ..config import VariantSwitches, merge_switches
 from ..handlers import (
@@ -241,6 +244,9 @@ class SMACEnv:
         self._unit_frame: UnitFrame | None = None
         self._handler_context: HandlerContext | None = None
         self._last_split_probe: dict[str, Any] = {}
+        self._last_ally_sc_actions: list[Any] = []
+        self._last_opponent_actions: list[Any] = []
+        self._forced_opponent_actions_schedule: list[list[dict[str, Any]]] | None = None
 
     def _build_session(self) -> SC2EnvRawSession:
         dual_controller_default = self.switches.opponent_mode == 'scripted_pool'
@@ -286,6 +292,18 @@ class SMACEnv:
 
     def set_runtime_lifecycle_owner(self, owner: str) -> None:
         self._runtime_lifecycle_owner = owner
+
+    def set_forced_opponent_actions_schedule(
+        self,
+        schedule: Sequence[Sequence[Mapping[str, Any]]] | None,
+    ) -> None:
+        if not schedule:
+            self._forced_opponent_actions_schedule = None
+            return
+        self._forced_opponent_actions_schedule = [
+            [dict(item) for item in list(step or []) if isinstance(item, Mapping)]
+            for step in list(schedule)
+        ]
 
     def seed(self, seed: int | None = None):
         if seed is None:
@@ -387,12 +405,18 @@ class SMACEnv:
             if sc_action is not None:
                 ally_sc_actions.append(sc_action)
 
-        opponent_actions = self._action_handler.build_opponent_actions(
-            frame=self._unit_frame,
-            context=self._handler_context,
-            actions=actions_int,
-            runtime=self._opponent_runtime,
-        )
+        forced_opponent = self._forced_opponent_actions_for_step(self._episode_steps)
+        if forced_opponent is not None:
+            opponent_actions = forced_opponent
+        else:
+            opponent_actions = self._action_handler.build_opponent_actions(
+                frame=self._unit_frame,
+                context=self._handler_context,
+                actions=actions_int,
+                runtime=self._opponent_runtime,
+            )
+        self._last_ally_sc_actions = list(ally_sc_actions)
+        self._last_opponent_actions = list(opponent_actions or [])
         return ally_sc_actions, opponent_actions
 
     def _submit_step_actions(
@@ -808,6 +832,17 @@ class SMACEnv:
         ctx.fov_directions = self.fov_directions
         ctx.canonical_fov_directions = self.canonical_fov_directions
 
+    def _forced_opponent_actions_for_step(
+        self,
+        step_idx: int,
+    ) -> list[Any] | None:
+        schedule = self._forced_opponent_actions_schedule
+        if not schedule:
+            return None
+        if int(step_idx) < 0 or int(step_idx) >= len(schedule):
+            return []
+        return _decode_forced_opponent_actions(schedule[int(step_idx)])
+
     def _split_raw_units(self) -> tuple[list[Any], list[Any]]:
         if self._obs is None:
             self._last_split_probe = {}
@@ -824,9 +859,17 @@ class SMACEnv:
         if not enemies:
             enemies = [u for u in ally_units if u.owner == 2]
         allies_sorted = sorted(allies, key=attrgetter('unit_type', 'pos.x', 'pos.y'))
-        # Legacy SMAC-family envs assign enemy IDs by observed raw order on reset,
-        # then keep those IDs stable via tag updates; avoid per-step enemy sorting.
-        enemies_ordered = list(enemies)
+        if self.switches.opponent_mode == 'scripted_pool':
+            # Scripted dual-controller observations may emit different raw enemy
+            # ordering across runs with the same seed. Canonicalize by tag so
+            # slot-to-tag assignment is deterministic and parity-stable.
+            enemies_ordered = sorted(
+                enemies,
+                key=lambda unit: int(getattr(unit, 'tag', -1)),
+            )
+        else:
+            # Legacy non-scripted families preserve observed enemy order.
+            enemies_ordered = list(enemies)
         probe: dict[str, Any] = {
             'allies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in allies_sorted],
             'enemies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in enemies_ordered],
@@ -943,6 +986,8 @@ class SMACEnv:
             'enemy_frame_tags': (
                 frame.enemies.tags.astype(int).tolist() if frame is not None else []
             ),
+            'ally_actions_probe': _summarize_sc_actions(self._last_ally_sc_actions),
+            'opponent_actions_probe': _summarize_sc_actions(self._last_opponent_actions),
         }
 
     def _sync_legacy_unit_views(self) -> None:
@@ -1072,3 +1117,59 @@ def _decode_terrain_height(
         return np.flip(np.transpose(arr), axis=1) / 255.0
     except Exception:
         return None
+
+
+def _summarize_sc_actions(actions: Sequence[Any]) -> list[dict[str, Any]]:
+    summary: list[dict[str, Any]] = []
+    for idx, action in enumerate(list(actions)[:16]):
+        payload: dict[str, Any] = {
+            'idx': int(idx),
+            'type': type(action).__name__,
+        }
+        command = getattr(getattr(action, 'action_raw', None), 'unit_command', None)
+        if command is None:
+            summary.append(payload)
+            continue
+        payload['ability_id'] = int(getattr(command, 'ability_id', 0))
+        payload['target_unit_tag'] = int(getattr(command, 'target_unit_tag', 0))
+        world_pos = getattr(command, 'target_world_space_pos', None)
+        if world_pos is not None and hasattr(world_pos, 'x') and hasattr(world_pos, 'y'):
+            payload['target_xy'] = [float(world_pos.x), float(world_pos.y)]
+        payload['unit_tags'] = [int(tag) for tag in list(getattr(command, 'unit_tags', []))]
+        summary.append(payload)
+    return summary
+
+
+def _decode_forced_opponent_actions(
+    step_actions: Sequence[Mapping[str, Any]],
+) -> list[Any]:
+    actions: list[Any] = []
+    for payload in list(step_actions or []):
+        if not isinstance(payload, Mapping):
+            continue
+        ability_id = int(payload.get('ability_id', 0) or 0)
+        unit_tags = [int(tag) for tag in list(payload.get('unit_tags', []) or [])]
+        if ability_id <= 0 or not unit_tags:
+            continue
+        cmd = r_pb.ActionRawUnitCommand(
+            ability_id=ability_id,
+            unit_tags=unit_tags,
+            queue_command=False,
+        )
+        target_unit_tag = int(payload.get('target_unit_tag', 0) or 0)
+        if target_unit_tag > 0:
+            cmd.target_unit_tag = target_unit_tag
+        target_xy = payload.get('target_xy')
+        if (
+            isinstance(target_xy, Sequence)
+            and len(target_xy) >= 2
+            and target_unit_tag <= 0
+        ):
+            cmd.target_world_space_pos.CopyFrom(
+                sc_common.Point2D(
+                    x=float(target_xy[0]),
+                    y=float(target_xy[1]),
+                )
+            )
+        actions.append(sc_pb.Action(action_raw=r_pb.ActionRaw(unit_command=cmd)))
+    return actions

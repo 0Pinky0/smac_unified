@@ -284,3 +284,56 @@ def test_scripted_pool_map_spec_prefers_new_maps_for_overlap_maps():
     assert computer_map.directory == 'SMAC_Maps'
     assert computer_map.filename == '3m'
 
+
+def test_forced_opponent_action_schedule_overrides_runtime_branch():
+    env = SMACEnv(variant='smac-hard', map_name='3m')
+
+    class _ActionStub:
+        def build_agent_action(
+            self,
+            *,
+            frame,
+            context,
+            agent_id,
+            action,
+        ):
+            del frame, context, agent_id, action
+            return None
+
+        def build_opponent_actions(
+            self,
+            *,
+            frame,
+            context,
+            actions,
+            runtime,
+        ):
+            del frame, context, actions, runtime
+            return ['runtime-branch']
+
+    env._action_handler = _ActionStub()
+    env._unit_frame = object()
+    env._refresh_handler_context()
+    env.set_forced_opponent_actions_schedule(
+        [
+            [
+                {
+                    'ability_id': 23,
+                    'target_unit_tag': 4242,
+                    'unit_tags': [1010],
+                }
+            ]
+        ]
+    )
+
+    _, opponent_actions = env._encode_step_actions([0] * env.n_agents)
+    assert len(opponent_actions) == 1
+    command = opponent_actions[0].action_raw.unit_command
+    assert int(command.ability_id) == 23
+    assert int(command.target_unit_tag) == 4242
+    assert list(command.unit_tags) == [1010]
+
+    env._episode_steps = 9
+    _, opponent_actions = env._encode_step_actions([0] * env.n_agents)
+    assert opponent_actions == []
+

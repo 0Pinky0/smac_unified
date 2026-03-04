@@ -2,9 +2,12 @@ from types import SimpleNamespace
 
 from tools.native_core_validation import (
     CaseResult,
+    _aggregate_parity_by_family,
     _build_native_options,
+    _build_matrix_cases,
     _compare_case_pair,
     _effective_steady_parity_steps,
+    _run_case,
     _summarize,
     _summarize_parity_by_profile,
 )
@@ -580,6 +583,8 @@ def test_parity_compare_run_failed_includes_error_detail():
     assert result['ok'] is False
     assert result['first_mismatch_field'] == 'run_failed'
     assert result['first_mismatch_detail']['native_error'] == 'native failed'
+    assert 'native_failure_kind' in result['first_mismatch_detail']
+    assert 'native_exit_code' in result['first_mismatch_detail']
 
 
 def test_parity_compare_records_first_mismatch_detail_values():
@@ -607,6 +612,20 @@ def test_native_option_builder_can_enable_capture_debug_probe():
         pipeline_step_and_observe='default',
         reuse_step_observe_requests='default',
         capture_debug_probe=True,
+    )
+    options = _build_native_options(args)
+    assert options['capture_debug_probe'] is True
+
+
+def test_native_option_builder_enables_debug_probe_for_forced_opponent_replay():
+    args = SimpleNamespace(
+        native_options_json='{}',
+        ensure_available_actions='default',
+        pipeline_actions_and_step='default',
+        pipeline_step_and_observe='default',
+        reuse_step_observe_requests='default',
+        capture_debug_probe=False,
+        force_opponent_actions_from_bridge=True,
     )
     options = _build_native_options(args)
     assert options['capture_debug_probe'] is True
@@ -642,4 +661,142 @@ def test_parity_compare_aggregates_step_counts_for_multiple_mismatch_steps():
     assert result['ok'] is False
     assert result['mismatch_step_counts'].get('1', 0) >= 1
     assert result['mismatch_step_counts'].get('3', 0) >= 1
+
+
+def test_build_matrix_cases_resolves_presets_and_logic_lanes():
+    args = SimpleNamespace(
+        families=['smac-hard'],
+        matrix_preset='smac-hard-longtail',
+        family_maps_json='{}',
+        logic_lane_preset='hard-opponent-bot',
+        logic_lanes_json='[]',
+        bridge_overridden_lanes=False,
+    )
+    cases = _build_matrix_cases(args)
+    case_ids = sorted(case.case_id for case in cases)
+    assert 'smac-hard:3m:default' in case_ids
+    assert any(case.case_id.endswith(':hard_bot') for case in cases)
+    hard_bot_cases = [case for case in cases if case.lane_id == 'hard_bot']
+    assert hard_bot_cases
+    assert all(case.logic_switches.get('opponent_mode') == 'sc2_computer' for case in hard_bot_cases)
+    assert all(case.bridge_enabled is False for case in hard_bot_cases)
+
+
+def test_aggregate_parity_by_family_rolls_up_case_payloads():
+    payload = {
+        'smac:3m:default': {
+            'family': 'smac',
+            'ok': True,
+            'steps_compared': 10,
+            'mismatch_count': 0,
+            'mismatch_field_counts': {},
+            'mismatch_step_counts': {},
+            'first_mismatch_field': '',
+            'first_mismatch_step': -1,
+            'first_mismatch_detail': {},
+        },
+        'smac:8m:default': {
+            'family': 'smac',
+            'ok': False,
+            'steps_compared': 10,
+            'mismatch_count': 2,
+            'mismatch_field_counts': {'reward': 2},
+            'mismatch_step_counts': {'4': 1, '7': 1},
+            'first_mismatch_field': 'reward',
+            'first_mismatch_step': 4,
+            'first_mismatch_detail': {'field': 'reward', 'step': 4},
+        },
+    }
+    aggregated = _aggregate_parity_by_family(payload)
+    smac_payload = aggregated['smac']
+    assert smac_payload['ok'] is False
+    assert smac_payload['steps_compared'] == 20
+    assert smac_payload['mismatch_count'] == 2
+    assert smac_payload['mismatch_field_counts']['reward'] == 2
+    assert smac_payload['first_mismatch_field'] == 'reward'
+
+
+def test_run_case_timeout_sets_failure_kind_and_exit_code():
+    import tools.native_core_validation as ncv
+
+    original_run = ncv.subprocess.run
+
+    def _raise_timeout(*args, **kwargs):
+        del args, kwargs
+        raise ncv.subprocess.TimeoutExpired(cmd=['python'], timeout=1.0)
+
+    ncv.subprocess.run = _raise_timeout
+    try:
+        row = _run_case(
+            profile='quick',
+            case_id='smac:3m:default',
+            family='smac',
+            map_name='3m',
+            lane_id='default',
+            logic_switches={},
+            parity_enabled=True,
+            backend_mode='native',
+            repeat_idx=0,
+            steps=1,
+            warmup_steps=0,
+            seed=7,
+            forced_actions=None,
+            forced_opponent_actions=None,
+            normalized_api=False,
+            native_options={},
+            parallel_envs=1,
+            pool_mode='sync',
+            subprocess_timeout_s=1.0,
+            make_env_fn=lambda **_: None,
+        )
+    finally:
+        ncv.subprocess.run = original_run
+    assert row.ok is False
+    assert row.failure_kind == 'timeout'
+    assert row.exit_code == 124
+
+
+def test_run_case_nonzero_sets_failure_kind_and_exit_code():
+    import tools.native_core_validation as ncv
+
+    class _Proc:
+        returncode = 17
+        stdout = ''
+        stderr = 'boom\\n'
+
+    original_run = ncv.subprocess.run
+
+    def _return_nonzero(*args, **kwargs):
+        del args, kwargs
+        return _Proc()
+
+    ncv.subprocess.run = _return_nonzero
+    try:
+        row = _run_case(
+            profile='quick',
+            case_id='smac:3m:default',
+            family='smac',
+            map_name='3m',
+            lane_id='default',
+            logic_switches={},
+            parity_enabled=True,
+            backend_mode='bridge',
+            repeat_idx=0,
+            steps=1,
+            warmup_steps=0,
+            seed=7,
+            forced_actions=None,
+            forced_opponent_actions=None,
+            normalized_api=False,
+            native_options={},
+            parallel_envs=1,
+            pool_mode='sync',
+            subprocess_timeout_s=1.0,
+            make_env_fn=lambda **_: None,
+        )
+    finally:
+        ncv.subprocess.run = original_run
+    assert row.ok is False
+    assert row.failure_kind == 'subprocess_nonzero'
+    assert row.exit_code == 17
 

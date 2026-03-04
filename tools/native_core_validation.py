@@ -9,9 +9,9 @@ import statistics
 import subprocess
 import sys
 import time
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Mapping
 
 import numpy as np
 
@@ -28,6 +28,40 @@ DEFAULT_MAPS = {
     'smac-hard': '3m',
 }
 
+MATRIX_PRESET_MAPS: dict[str, dict[str, list[str]]] = {
+    'none': {},
+    'critical-core': {
+        'smac': ['3m', '8m'],
+        'smacv2': ['8m', '10gen_terran'],
+        'smac-hard': ['3m', '6m_vs_10m'],
+    },
+    'smac-hard-longtail': {
+        'smac-hard': ['3m', '6m_vs_10m', '3hl_vs_24zl', 'mmmt_vs_zspi'],
+    },
+}
+
+LOGIC_LANE_PRESETS: dict[str, list[dict[str, Any]]] = {
+    'none': [],
+    'hard-opponent-bot': [
+        {
+            'id': 'hard_bot',
+            'families': ['smac-hard'],
+            'logic_switches': {'opponent_mode': 'sc2_computer'},
+            'bridge_enabled': False,
+        }
+    ],
+}
+
+
+@dataclass(frozen=True)
+class MatrixCase:
+    case_id: str
+    family: str
+    map_name: str
+    lane_id: str = 'default'
+    logic_switches: dict[str, str] = field(default_factory=dict)
+    bridge_enabled: bool = True
+
 
 @dataclass
 class CaseResult:
@@ -40,6 +74,10 @@ class CaseResult:
     elapsed_s: float
     steps: int
     sps: float
+    case_id: str = ''
+    lane_id: str = 'default'
+    logic_switches: dict[str, str] = field(default_factory=dict)
+    run_seed: int = 0
     startup_s: float = 0.0
     step_elapsed_s: float = 0.0
     step_sps: float = 0.0
@@ -56,15 +94,190 @@ class CaseResult:
     steady_latency_ms_p99: float = 0.0
     parallel_envs: int = 1
     pool_mode: str = 'sync'
+    parity_enabled: bool = True
     trace: list[dict[str, Any]] | None = None
+    failure_kind: str = ''
+    exit_code: int = 0
     error: str = ''
+
+
+def _dedupe_strings(values: list[str]) -> list[str]:
+    seen: set[str] = set()
+    output: list[str] = []
+    for value in values:
+        item = str(value).strip()
+        if not item or item in seen:
+            continue
+        seen.add(item)
+        output.append(item)
+    return output
+
+
+def _parse_family_maps_json(raw: str) -> dict[str, list[str]]:
+    payload = str(raw or '{}').strip() or '{}'
+    try:
+        parsed = json.loads(payload)
+    except Exception as exc:
+        raise ValueError(f'Invalid --family-maps-json payload: {exc}') from exc
+    if not isinstance(parsed, dict):
+        raise ValueError('--family-maps-json must be a JSON object.')
+    output: dict[str, list[str]] = {}
+    for key, value in parsed.items():
+        if not isinstance(value, list):
+            raise ValueError(
+                '--family-maps-json values must be JSON arrays of map names.'
+            )
+        output[str(key)] = _dedupe_strings([str(item) for item in value])
+    return output
+
+
+def _parse_logic_lanes_json(raw: str) -> list[dict[str, Any]]:
+    payload = str(raw or '[]').strip() or '[]'
+    try:
+        parsed = json.loads(payload)
+    except Exception as exc:
+        raise ValueError(f'Invalid --logic-lanes-json payload: {exc}') from exc
+    if not isinstance(parsed, list):
+        raise ValueError('--logic-lanes-json must be a JSON array.')
+    lanes: list[dict[str, Any]] = []
+    for idx, item in enumerate(parsed):
+        if not isinstance(item, dict):
+            raise ValueError('--logic-lanes-json entries must be JSON objects.')
+        lane_id = str(item.get('id', f'lane_{idx}')).strip() or f'lane_{idx}'
+        switches_raw = item.get('logic_switches', {})
+        if switches_raw is None:
+            switches_raw = {}
+        if not isinstance(switches_raw, dict):
+            raise ValueError('logic-lanes entry logic_switches must be an object.')
+        switches = {str(k): str(v) for k, v in switches_raw.items()}
+        families_raw = item.get('families', [])
+        if families_raw is None:
+            families_raw = []
+        if not isinstance(families_raw, list):
+            raise ValueError('logic-lanes entry families must be an array.')
+        families = _dedupe_strings([str(f) for f in families_raw])
+        bridge_enabled = item.get('bridge_enabled')
+        if bridge_enabled is None:
+            bridge_enabled = len(switches) == 0
+        lanes.append(
+            {
+                'id': lane_id,
+                'families': families,
+                'logic_switches': switches,
+                'bridge_enabled': bool(bridge_enabled),
+            }
+        )
+    return lanes
+
+
+def _resolve_family_maps(
+    *,
+    families: list[str],
+    matrix_preset: str,
+    family_maps_json: str,
+) -> dict[str, list[str]]:
+    preset_payload = MATRIX_PRESET_MAPS.get(str(matrix_preset), {})
+    overrides = _parse_family_maps_json(family_maps_json)
+    resolved: dict[str, list[str]] = {}
+    for family in families:
+        maps = list(preset_payload.get(family, []))
+        if not maps:
+            maps = [DEFAULT_MAPS[family]]
+        override_maps = overrides.get(family)
+        if override_maps:
+            maps = list(override_maps)
+        resolved[family] = _dedupe_strings(maps)
+    return resolved
+
+
+def _resolve_logic_lanes(
+    *,
+    preset_name: str,
+    logic_lanes_json: str,
+    bridge_overridden_lanes: bool,
+) -> list[dict[str, Any]]:
+    lanes: list[dict[str, Any]] = [
+        {
+            'id': 'default',
+            'families': [],
+            'logic_switches': {},
+            'bridge_enabled': True,
+        }
+    ]
+    lanes.extend([dict(item) for item in LOGIC_LANE_PRESETS.get(str(preset_name), [])])
+    lanes.extend(_parse_logic_lanes_json(logic_lanes_json))
+
+    normalized: list[dict[str, Any]] = []
+    seen_ids: set[str] = set()
+    for idx, lane in enumerate(lanes):
+        lane_id = str(lane.get('id', f'lane_{idx}')).strip() or f'lane_{idx}'
+        if lane_id in seen_ids:
+            lane_id = f'{lane_id}_{idx}'
+        seen_ids.add(lane_id)
+        switches = {str(k): str(v) for k, v in dict(lane.get('logic_switches', {})).items()}
+        families = _dedupe_strings([str(f) for f in list(lane.get('families', []))])
+        bridge_enabled = bool(lane.get('bridge_enabled', True))
+        if switches and not bool(bridge_overridden_lanes):
+            bridge_enabled = False
+        normalized.append(
+            {
+                'id': lane_id,
+                'families': families,
+                'logic_switches': switches,
+                'bridge_enabled': bridge_enabled,
+            }
+        )
+    return normalized
+
+
+def _build_matrix_cases(args: argparse.Namespace) -> list[MatrixCase]:
+    families = [str(item) for item in list(args.families)]
+    family_maps = _resolve_family_maps(
+        families=families,
+        matrix_preset=str(getattr(args, 'matrix_preset', 'none')),
+        family_maps_json=str(getattr(args, 'family_maps_json', '{}')),
+    )
+    logic_lanes = _resolve_logic_lanes(
+        preset_name=str(getattr(args, 'logic_lane_preset', 'none')),
+        logic_lanes_json=str(getattr(args, 'logic_lanes_json', '[]')),
+        bridge_overridden_lanes=bool(getattr(args, 'bridge_overridden_lanes', False)),
+    )
+    cases: list[MatrixCase] = []
+    for family in families:
+        maps = family_maps.get(family, [DEFAULT_MAPS[family]])
+        for map_name in maps:
+            for lane in logic_lanes:
+                lane_families = list(lane.get('families', []))
+                if lane_families and family not in lane_families:
+                    continue
+                lane_id = str(lane.get('id', 'default'))
+                case_id = f'{family}:{map_name}:{lane_id}'
+                cases.append(
+                    MatrixCase(
+                        case_id=case_id,
+                        family=family,
+                        map_name=map_name,
+                        lane_id=lane_id,
+                        logic_switches=dict(lane.get('logic_switches', {})),
+                        bridge_enabled=bool(lane.get('bridge_enabled', True)),
+                    )
+                )
+    return cases
+
+
+def _parity_group_key(row: CaseResult) -> str:
+    return str(row.case_id or row.family)
 
 
 def _run_case_parallel_native(
     *,
     profile: str,
+    case_id: str,
     family: str,
     map_name: str,
+    lane_id: str,
+    logic_switches: dict[str, str],
+    parity_enabled: bool,
     repeat_idx: int,
     steps: int,
     warmup_steps: int,
@@ -85,6 +298,7 @@ def _run_case_parallel_native(
         family=family,
         map_name=map_name,
         normalized_api=normalized_api,
+        logic_switches=logic_switches or None,
         native_options=native_options,
         pool_mode=pool_mode,
         seed=seed,
@@ -193,10 +407,14 @@ def _run_case_parallel_native(
         elapsed_total = max(time.perf_counter() - t0, 1e-9)
         return CaseResult(
             profile=profile,
+            case_id=case_id,
             family=family,
             map_name=map_name,
+            lane_id=lane_id,
+            logic_switches=dict(logic_switches or {}),
             backend_mode='native',
             repeat_idx=repeat_idx,
+            run_seed=int(seed),
             ok=False,
             elapsed_s=elapsed_total,
             steps=steps,
@@ -204,6 +422,9 @@ def _run_case_parallel_native(
             warmup_steps=warmup_steps,
             parallel_envs=parallel_envs,
             pool_mode=str(pool_mode),
+            parity_enabled=bool(parity_enabled),
+            failure_kind='native_parallel_exception',
+            exit_code=1,
             error=str(exc)[:400],
         )
 
@@ -226,10 +447,14 @@ def _run_case_parallel_native(
 
     return CaseResult(
         profile=profile,
+        case_id=case_id,
         family=family,
         map_name=map_name,
+        lane_id=lane_id,
+        logic_switches=dict(logic_switches or {}),
         backend_mode='native',
         repeat_idx=repeat_idx,
+        run_seed=int(seed),
         ok=True,
         elapsed_s=elapsed,
         steps=steps,
@@ -250,6 +475,7 @@ def _run_case_parallel_native(
         steady_latency_ms_p99=_pct(steady_latencies_ms, 99),
         parallel_envs=parallel_envs,
         pool_mode=str(pool_mode),
+        parity_enabled=bool(parity_enabled),
         trace=trace,
     )
 
@@ -257,26 +483,36 @@ def _run_case_parallel_native(
 def _run_case(
     *,
     profile: str,
+    case_id: str,
     family: str,
     map_name: str,
+    lane_id: str,
+    logic_switches: dict[str, str],
+    parity_enabled: bool,
     backend_mode: str,
     repeat_idx: int,
     steps: int,
     warmup_steps: int,
     seed: int,
     forced_actions: list[list[int]] | None,
+    forced_opponent_actions: list[list[dict[str, Any]]] | None,
     normalized_api: bool,
     native_options: dict[str, Any],
     parallel_envs: int,
     pool_mode: str,
+    subprocess_timeout_s: float,
     make_env_fn,
 ) -> CaseResult:
     del make_env_fn
     if backend_mode == 'native' and int(parallel_envs) > 1:
         return _run_case_parallel_native(
             profile=profile,
+            case_id=case_id,
             family=family,
             map_name=map_name,
+            lane_id=lane_id,
+            logic_switches=logic_switches,
+            parity_enabled=parity_enabled,
             repeat_idx=repeat_idx,
             steps=steps,
             warmup_steps=warmup_steps,
@@ -291,6 +527,7 @@ def _run_case(
 import json
 import sys
 import time
+import atexit
 from pathlib import Path
 
 import numpy as np
@@ -309,13 +546,28 @@ backend_mode = sys.argv[4]
 steps = int(sys.argv[5])
 warmup_steps = int(sys.argv[6])
 forced_actions = json.loads(sys.argv[7]) if sys.argv[7] else None
-seed = int(sys.argv[8])
-normalized_api = bool(int(sys.argv[9]))
-native_options = json.loads(sys.argv[10]) if sys.argv[10] else {}
-parallel_envs = int(sys.argv[11])
-pool_mode = sys.argv[12]
+forced_opponent_actions = json.loads(sys.argv[8]) if sys.argv[8] else None
+seed = int(sys.argv[9])
+normalized_api = bool(int(sys.argv[10]))
+native_options = json.loads(sys.argv[11]) if sys.argv[11] else {}
+parallel_envs = int(sys.argv[12])
+pool_mode = sys.argv[13]
+logic_switches = json.loads(sys.argv[14]) if sys.argv[14] else {}
 capture_debug_probe = bool(native_options.get("capture_debug_probe", False))
 warmup_steps = max(0, min(warmup_steps, steps))
+_env_holder = {"env": None}
+
+def _safe_close_env():
+    env_obj = _env_holder.get("env")
+    if env_obj is None:
+        return
+    try:
+        env_obj.close()
+    except Exception:
+        pass
+    _env_holder["env"] = None
+
+atexit.register(_safe_close_env)
 
 def _probe_unit_slots(mapping):
     if not isinstance(mapping, dict):
@@ -355,13 +607,21 @@ else:
         family=family,
         map_name=map_name,
         normalized_api=normalized_api,
+        logic_switches=logic_switches or None,
         native_options=native_options,
         seed=seed,
     )
+_env_holder["env"] = env
 if normalized_api:
     env.reset(seed=seed)
 else:
     env.reset()
+if (
+    backend_mode == "native"
+    and forced_opponent_actions is not None
+    and hasattr(env, "set_forced_opponent_actions_schedule")
+):
+    env.set_forced_opponent_actions_schedule(forced_opponent_actions)
 t_reset = time.perf_counter()
 step_elapsed = 0.0
 steady_elapsed = 0.0
@@ -455,7 +715,7 @@ for step_idx in range(steps):
         "debug_probe": debug_probe,
     })
 t_close0 = time.perf_counter()
-env.close()
+_safe_close_env()
 t_end = time.perf_counter()
 elapsed = max(t_end - t0, 1e-9)
 startup = max(t_reset - t0, 0.0)
@@ -494,36 +754,44 @@ print(json.dumps({
 }))
 """
     t0 = time.perf_counter()
-    proc = subprocess.run(
-        [
-            sys.executable,
-            '-c',
-            runner,
-            str(Path(__file__).resolve().parents[1]),
-            family,
-            map_name,
-            backend_mode,
-            str(steps),
-            str(warmup_steps),
-            json.dumps(forced_actions or []),
-            str(int(seed)),
-            '1' if normalized_api else '0',
-            json.dumps(native_options),
-            str(int(parallel_envs)),
-            str(pool_mode),
-        ],
-        capture_output=True,
-        text=True,
-    )
-    elapsed_total = max(time.perf_counter() - t0, 1e-9)
-    if proc.returncode != 0:
-        error = proc.stderr.strip() or proc.stdout.strip() or 'unknown failure'
+    command = [
+        sys.executable,
+        '-c',
+        runner,
+        str(Path(__file__).resolve().parents[1]),
+        family,
+        map_name,
+        backend_mode,
+        str(steps),
+        str(warmup_steps),
+        json.dumps(forced_actions or []),
+        json.dumps(forced_opponent_actions or []),
+        str(int(seed)),
+        '1' if normalized_api else '0',
+        json.dumps(native_options),
+        str(int(parallel_envs)),
+        str(pool_mode),
+        json.dumps(logic_switches or {}),
+    ]
+    try:
+        proc = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=max(float(subprocess_timeout_s), 1.0),
+        )
+    except subprocess.TimeoutExpired:
+        elapsed_total = max(time.perf_counter() - t0, 1e-9)
         return CaseResult(
             profile=profile,
+            case_id=case_id,
             family=family,
             map_name=map_name,
+            lane_id=lane_id,
+            logic_switches=dict(logic_switches or {}),
             backend_mode=backend_mode,
             repeat_idx=repeat_idx,
+            run_seed=int(seed),
             ok=False,
             elapsed_s=elapsed_total,
             steps=steps,
@@ -531,6 +799,34 @@ print(json.dumps({
             warmup_steps=warmup_steps,
             parallel_envs=int(parallel_envs),
             pool_mode=str(pool_mode),
+            parity_enabled=bool(parity_enabled),
+            failure_kind='timeout',
+            exit_code=124,
+            error='subprocess timeout expired',
+        )
+    elapsed_total = max(time.perf_counter() - t0, 1e-9)
+    if proc.returncode != 0:
+        error = proc.stderr.strip() or proc.stdout.strip() or 'unknown failure'
+        return CaseResult(
+            profile=profile,
+            case_id=case_id,
+            family=family,
+            map_name=map_name,
+            lane_id=lane_id,
+            logic_switches=dict(logic_switches or {}),
+            backend_mode=backend_mode,
+            repeat_idx=repeat_idx,
+            run_seed=int(seed),
+            ok=False,
+            elapsed_s=elapsed_total,
+            steps=steps,
+            sps=0.0,
+            warmup_steps=warmup_steps,
+            parallel_envs=int(parallel_envs),
+            pool_mode=str(pool_mode),
+            parity_enabled=bool(parity_enabled),
+            failure_kind='subprocess_nonzero',
+            exit_code=int(proc.returncode),
             error=error.splitlines()[-1][:400],
         )
 
@@ -540,14 +836,41 @@ print(json.dumps({
         if line.startswith('{') and line.endswith('}'):
             payload = json.loads(line)
             break
+    if not payload:
+        return CaseResult(
+            profile=profile,
+            case_id=case_id,
+            family=family,
+            map_name=map_name,
+            lane_id=lane_id,
+            logic_switches=dict(logic_switches or {}),
+            backend_mode=backend_mode,
+            repeat_idx=repeat_idx,
+            run_seed=int(seed),
+            ok=False,
+            elapsed_s=elapsed_total,
+            steps=steps,
+            sps=0.0,
+            warmup_steps=warmup_steps,
+            parallel_envs=int(parallel_envs),
+            pool_mode=str(pool_mode),
+            parity_enabled=bool(parity_enabled),
+            failure_kind='payload_parse_failed',
+            exit_code=int(proc.returncode),
+            error='missing JSON payload from subprocess output',
+        )
     elapsed = float(payload.get('elapsed_s', elapsed_total))
     cold_sps = float(payload.get('sps', steps / max(elapsed, 1e-9)))
     return CaseResult(
         profile=profile,
+        case_id=case_id,
         family=family,
         map_name=map_name,
+        lane_id=lane_id,
+        logic_switches=dict(logic_switches or {}),
         backend_mode=backend_mode,
         repeat_idx=repeat_idx,
+        run_seed=int(seed),
         ok=True,
         elapsed_s=elapsed,
         steps=steps,
@@ -568,6 +891,9 @@ print(json.dumps({
         steady_latency_ms_p99=float(payload.get('steady_latency_ms_p99', 0.0)),
         parallel_envs=int(payload.get('parallel_envs', parallel_envs)),
         pool_mode=str(payload.get('pool_mode', pool_mode)),
+        parity_enabled=bool(parity_enabled),
+        failure_kind='',
+        exit_code=int(proc.returncode),
         trace=list(payload.get('trace', []) or []),
     )
 
@@ -736,6 +1062,10 @@ def _compare_case_pair(
             'step': -1,
             'native_ok': bool(native.ok),
             'bridge_ok': bool(bridge.ok),
+            'native_failure_kind': str(native.failure_kind or ''),
+            'bridge_failure_kind': str(bridge.failure_kind or ''),
+            'native_exit_code': int(native.exit_code),
+            'bridge_exit_code': int(bridge.exit_code),
             'native_error': str(native.error or ''),
             'bridge_error': str(bridge.error or ''),
         }
@@ -911,20 +1241,27 @@ def _summarize_parity_by_profile(
     profile_keys = sorted({row.profile for row in results})
     for profile in profile_keys:
         family_payload: Dict[str, Dict[str, Any]] = {}
-        profile_rows = [row for row in results if row.profile == profile]
-        for family in sorted({row.family for row in profile_rows}):
-            native_rows = _rows_by_mode(
-                results=profile_rows,
-                family=family,
-                mode='native',
-            )
-            bridge_rows = _rows_by_mode(
-                results=profile_rows,
-                family=family,
-                mode='bridge',
-            )
+        profile_rows = [
+            row
+            for row in results
+            if row.profile == profile and bool(row.parity_enabled)
+        ]
+        group_keys = sorted({_parity_group_key(row) for row in profile_rows})
+        for group_key in group_keys:
+            grouped_rows = [
+                row for row in profile_rows if _parity_group_key(row) == group_key
+            ]
+            grouped_rows = sorted(grouped_rows, key=lambda row: row.repeat_idx)
+            native_rows = [row for row in grouped_rows if row.backend_mode == 'native']
+            bridge_rows = [row for row in grouped_rows if row.backend_mode == 'bridge']
+            sample = grouped_rows[0]
             if not native_rows or not bridge_rows:
-                family_payload[family] = {
+                family_payload[group_key] = {
+                    'case_id': str(group_key),
+                    'family': str(sample.family),
+                    'map_name': str(sample.map_name),
+                    'lane_id': str(sample.lane_id),
+                    'logic_switches': dict(sample.logic_switches or {}),
                     'ok': False,
                     'steps_compared': 0,
                     'mismatch_count': 1,
@@ -1033,7 +1370,12 @@ def _summarize_parity_by_profile(
                 )
             if len(mismatches) >= 40:
                 mismatches = mismatches[:40] + ['... additional mismatches truncated ...']
-            family_payload[family] = {
+            family_payload[group_key] = {
+                'case_id': str(group_key),
+                'family': str(sample.family),
+                'map_name': str(sample.map_name),
+                'lane_id': str(sample.lane_id),
+                'logic_switches': dict(sample.logic_switches or {}),
                 'ok': mismatch_count == 0,
                 'steps_compared': int(steps_compared),
                 'mismatch_count': int(mismatch_count),
@@ -1047,6 +1389,60 @@ def _summarize_parity_by_profile(
             }
         parity_by_profile[profile] = family_payload
     return parity_by_profile
+
+
+def _aggregate_parity_by_family(
+    parity_cases: Mapping[str, Mapping[str, Any]],
+) -> Dict[str, Dict[str, Any]]:
+    output: Dict[str, Dict[str, Any]] = {}
+    for case_id, payload in parity_cases.items():
+        family = str(payload.get('family', '') or '').strip()
+        if not family:
+            family = str(case_id).split(':', 1)[0]
+        bucket = output.get(family)
+        if bucket is None:
+            bucket = {
+                'ok': True,
+                'steps_compared': 0,
+                'mismatch_count': 0,
+                'mismatch_field_counts': {},
+                'mismatch_step_counts': {},
+                'first_mismatch_field': '',
+                'first_mismatch_step': -1,
+                'first_mismatch_detail': {},
+                'cases': [],
+            }
+            output[family] = bucket
+        bucket['cases'].append(str(case_id))
+        case_ok = bool(payload.get('ok', False))
+        bucket['ok'] = bool(bucket['ok']) and case_ok
+        bucket['steps_compared'] = int(bucket['steps_compared']) + int(
+            payload.get('steps_compared', 0)
+        )
+        bucket['mismatch_count'] = int(bucket['mismatch_count']) + int(
+            payload.get('mismatch_count', 0)
+        )
+        for field, count in dict(payload.get('mismatch_field_counts', {}) or {}).items():
+            bucket['mismatch_field_counts'][field] = int(
+                bucket['mismatch_field_counts'].get(field, 0)
+            ) + int(count)
+        for step_key, count in dict(payload.get('mismatch_step_counts', {}) or {}).items():
+            bucket['mismatch_step_counts'][step_key] = int(
+                bucket['mismatch_step_counts'].get(step_key, 0)
+            ) + int(count)
+        if (
+            not case_ok
+            and str(bucket.get('first_mismatch_field', '')) == ''
+            and str(payload.get('first_mismatch_field', '')) != ''
+        ):
+            bucket['first_mismatch_field'] = str(payload.get('first_mismatch_field', ''))
+            bucket['first_mismatch_step'] = int(payload.get('first_mismatch_step', -1))
+            bucket['first_mismatch_detail'] = dict(
+                payload.get('first_mismatch_detail', {}) or {}
+            )
+    for bucket in output.values():
+        bucket['cases'] = sorted(set(bucket['cases']))
+    return output
 
 
 def _float_close(lhs: Any, rhs: Any, *, atol: float, rtol: float) -> bool:
@@ -1101,6 +1497,8 @@ def _build_native_options(args: argparse.Namespace) -> dict[str, Any]:
             payload[key] = value
     if bool(getattr(args, 'capture_debug_probe', False)):
         payload['capture_debug_probe'] = True
+    if bool(getattr(args, 'force_opponent_actions_from_bridge', False)):
+        payload['capture_debug_probe'] = True
     return payload
 
 
@@ -1125,6 +1523,33 @@ def main() -> int:
         nargs='+',
         default=['smac', 'smacv2', 'smac-hard'],
         choices=['smac', 'smacv2', 'smac-hard'],
+    )
+    parser.add_argument(
+        '--matrix-preset',
+        choices=sorted(MATRIX_PRESET_MAPS.keys()),
+        default='none',
+        help='Predefined map matrix preset; default keeps one map per family.',
+    )
+    parser.add_argument(
+        '--family-maps-json',
+        default='{}',
+        help='JSON object mapping family -> [map_name, ...] overrides.',
+    )
+    parser.add_argument(
+        '--logic-lane-preset',
+        choices=sorted(LOGIC_LANE_PRESETS.keys()),
+        default='none',
+        help='Optional predefined logic-switch lane set.',
+    )
+    parser.add_argument(
+        '--logic-lanes-json',
+        default='[]',
+        help='JSON array of extra lane objects: id/families/logic_switches/bridge_enabled.',
+    )
+    parser.add_argument(
+        '--bridge-overridden-lanes',
+        action='store_true',
+        help='Allow bridge runs for lanes with non-default logic switches.',
     )
     parser.add_argument('--steps', type=int, default=5)
     parser.add_argument(
@@ -1205,6 +1630,12 @@ def main() -> int:
         help='Deterministic seed used for both bridge/native runs.',
     )
     parser.add_argument(
+        '--repeat-seed-stride',
+        type=int,
+        default=1,
+        help='Per-repeat seed increment; repeat_seed = seed + repeat_idx * stride.',
+    )
+    parser.add_argument(
         '--normalized-api',
         action='store_true',
         help='Benchmark the normalized adapter API path instead of raw env API.',
@@ -1244,6 +1675,14 @@ def main() -> int:
         help='Include per-step unit ordering/mask debug probe payloads in traces.',
     )
     parser.add_argument(
+        '--force-opponent-actions-from-bridge',
+        action='store_true',
+        help=(
+            'For native lane, replay bridge opponent action commands from trace '
+            'to reduce policy-amplified drift in scripted modes.'
+        ),
+    )
+    parser.add_argument(
         '--parallel-envs',
         type=int,
         default=1,
@@ -1254,6 +1693,12 @@ def main() -> int:
         choices=['sync', 'thread'],
         default='sync',
         help='Execution mode for native pooled runs when --parallel-envs > 1.',
+    )
+    parser.add_argument(
+        '--subprocess-timeout-s',
+        type=float,
+        default=240.0,
+        help='Timeout in seconds for each subprocess lane execution.',
     )
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
@@ -1271,6 +1716,14 @@ def main() -> int:
     except ValueError as exc:
         print(str(exc), file=sys.stderr)
         return 2
+    try:
+        matrix_cases = _build_matrix_cases(args)
+    except ValueError as exc:
+        print(str(exc), file=sys.stderr)
+        return 2
+    if not matrix_cases:
+        print('No matrix cases resolved from the provided matrix arguments.', file=sys.stderr)
+        return 2
 
     if args.profile == 'quick':
         run_profiles = [('quick', args.steps, args.warmup_steps)]
@@ -1283,36 +1736,47 @@ def main() -> int:
         ]
 
     results: List[CaseResult] = []
+    repeat_seed_stride = int(getattr(args, 'repeat_seed_stride', 1))
     for profile_name, steps, warmup_steps in run_profiles:
-        for family in args.families:
-            map_name = DEFAULT_MAPS[family]
+        for case in matrix_cases:
             for repeat_idx in range(repeats):
+                run_seed = int(args.seed) + int(repeat_idx) * repeat_seed_stride
                 forced_actions = None
-                if bridge_enabled:
+                forced_opponent_actions = None
+                parity_enabled = bool(bridge_enabled and case.bridge_enabled)
+                if parity_enabled:
                     bridge_row = _run_case(
                         profile=profile_name,
-                        family=family,
-                        map_name=map_name,
+                        case_id=case.case_id,
+                        family=case.family,
+                        map_name=case.map_name,
+                        lane_id=case.lane_id,
+                        logic_switches=dict(case.logic_switches),
+                        parity_enabled=True,
                         backend_mode='bridge',
                         repeat_idx=repeat_idx,
                         steps=steps,
                         warmup_steps=warmup_steps,
-                        seed=int(args.seed),
+                        seed=run_seed,
                         forced_actions=None,
+                        forced_opponent_actions=None,
                         normalized_api=bool(args.normalized_api),
                         native_options=native_options,
                         parallel_envs=1,
                         pool_mode='sync',
+                        subprocess_timeout_s=float(args.subprocess_timeout_s),
                         make_env_fn=make_env,
                     )
                     results.append(bridge_row)
                     bridge_status = 'PASS' if bridge_row.ok else 'FAIL'
                     print(
-                        f'[{bridge_status}] profile={profile_name} family={family} '
-                        f'repeat={repeat_idx} mode=bridge map={map_name} '
+                        f'[{bridge_status}] profile={profile_name} case={case.case_id} '
+                        f'family={case.family} lane={case.lane_id} repeat={repeat_idx} '
+                        f'seed={run_seed} mode=bridge map={case.map_name} '
                         f'envs={bridge_row.parallel_envs} pool={bridge_row.pool_mode} '
                         f'cold_sps={bridge_row.sps:.3f} steady_sps={bridge_row.steady_sps:.3f} '
                         f'p95_ms={bridge_row.step_latency_ms_p95:.3f} elapsed={bridge_row.elapsed_s:.3f}s '
+                        f'failure={bridge_row.failure_kind or "none"} '
                         f'error={bridge_row.error}'
                     )
                     if bridge_row.ok and bridge_row.trace:
@@ -1320,30 +1784,50 @@ def main() -> int:
                             [int(a) for a in step.get('actions', [])]
                             for step in bridge_row.trace
                         ]
+                        if bool(args.force_opponent_actions_from_bridge):
+                            forced_opponent_actions = [
+                                list(
+                                    (
+                                        step.get('debug_probe', {}) or {}
+                                    ).get('opponent_actions_probe', [])
+                                    or []
+                                )
+                                for step in bridge_row.trace
+                            ]
+                            if not any(forced_opponent_actions):
+                                forced_opponent_actions = None
                 native_row = _run_case(
                     profile=profile_name,
-                    family=family,
-                    map_name=map_name,
+                    case_id=case.case_id,
+                    family=case.family,
+                    map_name=case.map_name,
+                    lane_id=case.lane_id,
+                    logic_switches=dict(case.logic_switches),
+                    parity_enabled=parity_enabled,
                     backend_mode='native',
                     repeat_idx=repeat_idx,
                     steps=steps,
                     warmup_steps=warmup_steps,
-                    seed=int(args.seed),
+                    seed=run_seed,
                     forced_actions=forced_actions,
+                    forced_opponent_actions=forced_opponent_actions,
                     normalized_api=bool(args.normalized_api),
                     native_options=native_options,
                     parallel_envs=parallel_envs,
                     pool_mode=str(args.pool_mode),
+                    subprocess_timeout_s=float(args.subprocess_timeout_s),
                     make_env_fn=make_env,
                 )
                 results.append(native_row)
                 native_status = 'PASS' if native_row.ok else 'FAIL'
                 print(
-                    f'[{native_status}] profile={profile_name} family={family} '
-                    f'repeat={repeat_idx} mode=native map={map_name} '
+                    f'[{native_status}] profile={profile_name} case={case.case_id} '
+                    f'family={case.family} lane={case.lane_id} repeat={repeat_idx} '
+                    f'seed={run_seed} mode=native map={case.map_name} '
                     f'envs={native_row.parallel_envs} pool={native_row.pool_mode} '
                     f'cold_sps={native_row.sps:.3f} steady_sps={native_row.steady_sps:.3f} '
                     f'p95_ms={native_row.step_latency_ms_p95:.3f} elapsed={native_row.elapsed_s:.3f}s '
+                    f'failure={native_row.failure_kind or "none"} '
                     f'error={native_row.error}'
                 )
 
@@ -1355,6 +1839,7 @@ def main() -> int:
     summary_by_profile = _summarize_by_profile(results)
     effective_steady_parity_steps = _effective_steady_parity_steps(args)
     parity_by_profile: dict[str, dict[str, dict[str, Any]]] = {}
+    parity_by_family_profile: dict[str, dict[str, dict[str, Any]]] = {}
     if bridge_enabled:
         parity_by_profile = _summarize_parity_by_profile(
             results=results,
@@ -1362,14 +1847,21 @@ def main() -> int:
             rtol=parity_rtol,
             steady_parity_steps=effective_steady_parity_steps,
         )
+        parity_by_family_profile = {
+            profile_name: _aggregate_parity_by_family(profile_payload)
+            for profile_name, profile_payload in parity_by_profile.items()
+        }
     primary_profile = run_profiles[0][0]
-    primary_parity = parity_by_profile.get(primary_profile, {})
+    primary_parity = parity_by_family_profile.get(primary_profile, {})
+    primary_parity_cases = parity_by_profile.get(primary_profile, {})
     if bridge_enabled:
-        for profile_name, family_payload in parity_by_profile.items():
-            for family, payload in family_payload.items():
+        for profile_name, case_payload in parity_by_profile.items():
+            for case_id, payload in case_payload.items():
                 status = 'PASS' if payload.get('ok', False) else 'FAIL'
                 print(
-                    f"[{status}] parity profile={profile_name} family={family} "
+                    f"[{status}] parity profile={profile_name} case={case_id} "
+                    f"family={payload.get('family', '')} map={payload.get('map_name', '')} "
+                    f"lane={payload.get('lane_id', '')} "
                     f"steps={payload.get('steps_compared', 0)} "
                     f"mismatches={payload.get('mismatch_count', 0)} "
                     f"first_field={payload.get('first_mismatch_field', '')} "
@@ -1379,10 +1871,21 @@ def main() -> int:
         'requested_profile': args.profile,
         'bridge_lane': 'on' if bridge_enabled else 'off',
         'seed': int(args.seed),
+        'repeat_seed_stride': int(repeat_seed_stride),
         'repeats': repeats,
         'normalized_api': bool(args.normalized_api),
         'parallel_envs': parallel_envs,
         'pool_mode': str(args.pool_mode),
+        'subprocess_timeout_s': float(args.subprocess_timeout_s),
+        'matrix_preset': str(args.matrix_preset),
+        'family_maps_json': str(args.family_maps_json),
+        'logic_lane_preset': str(args.logic_lane_preset),
+        'logic_lanes_json': str(args.logic_lanes_json),
+        'bridge_overridden_lanes': bool(args.bridge_overridden_lanes),
+        'force_opponent_actions_from_bridge': bool(
+            args.force_opponent_actions_from_bridge
+        ),
+        'matrix_cases': [asdict(case) for case in matrix_cases],
         'native_options': native_options,
         'steady_parity_mode': str(args.steady_parity_mode),
         'steady_parity_steps': max(int(args.steady_parity_steps), 0),
@@ -1399,7 +1902,9 @@ def main() -> int:
         'summary': summary_by_profile.get(primary_profile, {}),
         'summary_by_profile': summary_by_profile,
         'parity': primary_parity,
+        'parity_cases': primary_parity_cases,
         'parity_by_profile': parity_by_profile,
+        'parity_by_family_profile': parity_by_family_profile,
         'parity_tolerance': {
             'atol': parity_atol,
             'rtol': parity_rtol,

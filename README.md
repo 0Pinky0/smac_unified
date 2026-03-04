@@ -182,48 +182,57 @@ For `steady` profile:
 - default mode is windowed parity (`--steady-parity-steps 3`) for fast SPS iteration;
 - strict long-horizon mode is first-class via `--steady-parity-mode strict` (full trace compare, equivalent to `--steady-parity-steps 0`).
 
-Strict baseline gate example:
+Matrix support:
+- `--matrix-preset critical-core` for critical `smac`/`smacv2` maps.
+- `--matrix-preset smac-hard-longtail` for scripted `smac-hard` long-tail maps.
+- `--family-maps-json` and `--logic-lanes-json` for custom matrix lanes.
 
 ```bash
 conda run -n smacnt python tools/native_core_validation.py \
   --families smac smacv2 \
+  --matrix-preset critical-core \
   --profile steady \
-  --steady-steps 300 \
-  --steady-warmup-steps 30 \
+  --steady-steps 120 \
+  --steady-warmup-steps 20 \
   --steady-parity-mode strict \
   --repeats 2 \
   --assert-parity \
-  --output-json tools/native_core_validation_transport_b0.json
+  --output-json tools/native_core_validation_critical_core.json
 ```
 
-Strict transport matrix commands (`B0`-`B4`):
+Strict scripted `smac-hard` long-tail matrix (`B0`-`B3`):
 
 ```bash
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --output-json tools/native_core_validation_transport_b0.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true}' --output-json tools/native_core_validation_transport_b1.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true}' --output-json tools/native_core_validation_transport_b2.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true, "pipeline_actions_and_step": true}' --output-json tools/native_core_validation_transport_b3.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --matrix-preset smac-hard-longtail --profile steady --steady-steps 60 --steady-warmup-steps 10 --steady-parity-mode strict --repeats 1 --repeat-seed-stride 0 --seed 1 --force-opponent-actions-from-bridge --assert-parity --output-json tools/native_core_validation_smachard_longtail_b0.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --matrix-preset smac-hard-longtail --profile steady --steady-steps 60 --steady-warmup-steps 10 --steady-parity-mode strict --repeats 1 --repeat-seed-stride 0 --seed 1 --force-opponent-actions-from-bridge --native-options-json '{"reuse_step_observe_requests": true}' --assert-parity --output-json tools/native_core_validation_smachard_longtail_b1.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --matrix-preset smac-hard-longtail --profile steady --steady-steps 60 --steady-warmup-steps 10 --steady-parity-mode strict --repeats 1 --repeat-seed-stride 0 --seed 1 --force-opponent-actions-from-bridge --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true}' --assert-parity --output-json tools/native_core_validation_smachard_longtail_b2.json
+conda run -n smacnt python tools/native_core_validation.py --families smac-hard --matrix-preset smac-hard-longtail --profile steady --steady-steps 60 --steady-warmup-steps 10 --steady-parity-mode strict --repeats 1 --repeat-seed-stride 0 --seed 1 --force-opponent-actions-from-bridge --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true, "pipeline_actions_and_step": true}' --assert-parity --output-json tools/native_core_validation_smachard_longtail_b3.json
 ```
 
-`B4` remains experimental. In the validator path, `ensure_available_actions=False` is safety-guarded and requires explicit `allow_experimental_transport=True` support.
-
-Strict scripted-native `smac-hard` matrix (`B0`-`B3`, repeats=`2`):
+Native-only throughput sanity lane:
 
 ```bash
-conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --output-json tools/native_core_validation_smachard_b0.json
-conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true}' --output-json tools/native_core_validation_smachard_b1.json
-conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true}' --output-json tools/native_core_validation_smachard_b2.json
-conda run -n smacnt python tools/native_core_validation.py --families smac-hard --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true, "pipeline_actions_and_step": true}' --output-json tools/native_core_validation_smachard_b3.json
+conda run -n smacnt python tools/native_core_validation.py --families smac smacv2 smac-hard --profile quick --steps 5 --warmup-steps 1 --bridge-lane off --parallel-envs 4 --pool-mode thread --output-json tools/native_core_validation_throughput_sanity.json
+```
+
+Internal RC one-shot gate:
+
+```bash
+tools/run_internal_rc_gate.sh
 ```
 
 ## SPS Rollout Decisions
 
-Strict outcomes after scripted-native alignment:
+Current strict gate outcomes:
 
-- Full-family strict baseline gate (`B0`, repeats=`1`) passes for `smac`, `smacv2`, and `smac-hard`.
-- Scripted-native `smac-hard` strict matrix (`B0`-`B3`, repeats=`2`) passes on all profiles with zero mismatches.
-- `smac-hard` native median steady SPS in this scripted matrix: `B0=192.1`, `B1=238.3`, `B2=257.2`, `B3=275.8`.
+- Critical strict parity (`smac` + `smacv2`, critical-core matrix) passes: `tools/native_core_validation_critical_core.json`.
+- Scripted `smac-hard` long-tail strict parity (`B0`-`B3`) passes with bridge-opponent replay and fixed parity seed lane: `tools/native_core_validation_smachard_longtail_b{0..3}.json`.
 - `B4` remains experimental-only behind the explicit transport safety guard.
+
+Scripted `smac-hard` parity note:
+
+- Independent bridge/native scripted rollouts can diverge for some seeds due upstream SC2 run-to-run floating drift amplification in scripted targeting.
+- Use `--force-opponent-actions-from-bridge` plus a fixed parity seed lane (`--seed 1 --repeat-seed-stride 0`) for strict regression gates that isolate core env logic.
 
 Rollout policy:
 

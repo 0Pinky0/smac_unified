@@ -75,6 +75,14 @@ TEST_FUNCTIONS = [
         'test_session_rejects_submit_when_previous_step_is_pending',
     ),
     (
+        'tests.test_session_async',
+        'test_session_collect_without_submit_raises_runtime_error',
+    ),
+    (
+        'tests.test_session_async',
+        'test_session_close_clears_pending_async_step_state',
+    ),
+    (
         'tests.test_vector_pool',
         'test_vector_env_pool_sync_mode_runs_reset_step_and_close',
     ),
@@ -85,6 +93,14 @@ TEST_FUNCTIONS = [
     (
         'tests.test_vector_pool',
         'test_make_env_pool_offsets_seed_per_env_instance',
+    ),
+    (
+        'tests.test_vector_pool',
+        'test_vector_env_pool_thread_mode_propagates_step_exceptions',
+    ),
+    (
+        'tests.test_vector_pool',
+        'test_vector_env_pool_close_aggregates_close_errors',
     ),
     (
         'tests.test_native_builders',
@@ -291,6 +307,10 @@ TEST_FUNCTIONS = [
         'test_scripted_pool_map_spec_prefers_new_maps_for_overlap_maps',
     ),
     (
+        'tests.test_api_parity',
+        'test_forced_opponent_action_schedule_overrides_runtime_branch',
+    ),
+    (
         'tests.test_validation_parity',
         'test_parity_compare_passes_for_matching_traces',
     ),
@@ -360,11 +380,31 @@ TEST_FUNCTIONS = [
     ),
     (
         'tests.test_validation_parity',
+        'test_native_option_builder_enables_debug_probe_for_forced_opponent_replay',
+    ),
+    (
+        'tests.test_validation_parity',
         'test_parity_compare_reports_action_divergence_step_counts',
     ),
     (
         'tests.test_validation_parity',
         'test_parity_compare_aggregates_step_counts_for_multiple_mismatch_steps',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_build_matrix_cases_resolves_presets_and_logic_lanes',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_aggregate_parity_by_family_rolls_up_case_payloads',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_run_case_timeout_sets_failure_kind_and_exit_code',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_run_case_nonzero_sets_failure_kind_and_exit_code',
     ),
 ]
 

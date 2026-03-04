@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, TimeoutError as FutureTimeoutError
 import os
 import sys
 from dataclasses import dataclass
@@ -301,11 +301,22 @@ class SC2EnvRawSession:
 
     def close(self) -> None:
         self._pending_step_result = None
-        if self._pending_step_future is not None:
-            self._pending_step_future.cancel()
-            self._pending_step_future = None
+        pending = self._pending_step_future
+        self._pending_step_future = None
+        if pending is not None:
+            if not pending.done():
+                pending.cancel()
+            try:
+                pending.result(timeout=0.2)
+            except FutureTimeoutError:
+                pass
+            except Exception:
+                pass
         if self._step_executor is not None:
-            self._step_executor.shutdown(wait=False)
+            try:
+                self._step_executor.shutdown(wait=True, cancel_futures=True)
+            except TypeError:
+                self._step_executor.shutdown(wait=True)
             self._step_executor = None
         if self._env is not None:
             self._env.close()
