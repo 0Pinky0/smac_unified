@@ -36,7 +36,8 @@ def test_parity_compare_passes_for_matching_traces():
     result = _compare_case_pair(
         native=_case('native', trace),
         bridge=_case('bridge', trace),
-        tol=1e-6,
+        atol=1e-6,
+        rtol=1e-6,
     )
     assert result['ok'] is True
     assert result['mismatch_count'] == 0
@@ -80,9 +81,99 @@ def test_parity_compare_reports_mismatch_details():
     result = _compare_case_pair(
         native=_case('native', native_trace),
         bridge=_case('bridge', bridge_trace),
-        tol=1e-6,
+        atol=1e-6,
+        rtol=1e-6,
     )
     assert result['ok'] is False
     assert result['mismatch_count'] >= 1
     assert any('reward mismatch' in msg for msg in result['mismatches'])
+
+
+def test_parity_compare_detects_step_alignment_mismatch():
+    native_trace = [
+        {
+            'step': 1,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        }
+    ]
+    bridge_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        }
+    ]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+    )
+    assert result['ok'] is False
+    assert any('step id mismatch' in msg for msg in result['mismatches'])
+
+
+def test_parity_compare_uses_relative_tolerance():
+    native_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 10000.0009,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [10000.0009],
+            'state_head': [10000.0009],
+            'avail_actions': [[0, 1]],
+        }
+    ]
+    bridge_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 10000.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [10000.0],
+            'state_head': [10000.0],
+            'avail_actions': [[0, 1]],
+        }
+    ]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-8,
+        rtol=1e-4,
+    )
+    assert result['ok'] is True
 

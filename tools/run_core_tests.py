@@ -131,6 +131,14 @@ TEST_FUNCTIONS = [
         'tests.test_validation_parity',
         'test_parity_compare_reports_mismatch_details',
     ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_detects_step_alignment_mismatch',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_uses_relative_tolerance',
+    ),
 ]
 
 
