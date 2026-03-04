@@ -182,6 +182,7 @@ Strict baseline gate example:
 
 ```bash
 conda run -n smacnt python tools/native_core_validation.py \
+  --families smac smacv2 \
   --profile steady \
   --steady-steps 300 \
   --steady-warmup-steps 30 \
@@ -194,27 +195,28 @@ conda run -n smacnt python tools/native_core_validation.py \
 Strict transport matrix commands (`B0`-`B4`):
 
 ```bash
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --output-json tools/native_core_validation_transport_b0.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --output-json tools/native_core_validation_transport_b1.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --pipeline-step-and-observe true --output-json tools/native_core_validation_transport_b2.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --pipeline-step-and-observe true --pipeline-actions-and-step true --output-json tools/native_core_validation_transport_b3.json
-conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --assert-parity --reuse-step-observe-requests true --pipeline-step-and-observe true --pipeline-actions-and-step true --ensure-available-actions false --output-json tools/native_core_validation_transport_b4.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --output-json tools/native_core_validation_transport_b0.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true}' --output-json tools/native_core_validation_transport_b1.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true}' --output-json tools/native_core_validation_transport_b2.json
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --steady-parity-mode strict --repeats 2 --native-options-json '{"reuse_step_observe_requests": true, "pipeline_step_and_observe": true, "pipeline_actions_and_step": true}' --output-json tools/native_core_validation_transport_b3.json
 ```
+
+`B4` remains experimental. In the validator path, `ensure_available_actions=False` is safety-guarded and requires explicit `allow_experimental_transport=True` support.
 
 ## SPS Rollout Decisions
 
 Strict full-trace matrix (`steady`, repeats=`2`, `--steady-parity-mode strict`) outcome:
 
-- `B0`: strict parity failed on all families; first divergence `obs_head@step4`.
-- `B1`: strict parity failed on all families; first divergence `obs_head@step4`.
-- `B2`: strict parity failed on all families; first divergence `obs_head@step4`; highest median steady SPS (`smac=1361`, `smacv2=1164`, `smac-hard=1252`).
-- `B3`: strict parity failed on all families; first divergence `obs_head@step4`.
-- `B4`: native strict runs are blocked by the experimental transport safety guard unless `allow_experimental_transport=True`, and matrix runs without opt-in report `run_failed`.
+- `B0`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`.
+- `B1`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`.
+- `B2`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`; highest median steady SPS among `B0`-`B3` (`smac=1111.6`, `smacv2=1189.1`, `smac-hard=1311.3`).
+- `B3`: strict parity passes for `smac` and `smacv2`; `smac-hard` fails with first divergence `obs_head@step5`.
+- `B4`: remains experimental-only behind the explicit experimental transport guard.
 
 Rollout policy:
 
 - Keep conservative runtime defaults unchanged.
-- Do **not** promote `B2` to default until strict long-horizon parity passes.
+- Do **not** promote `B2` to default until strict long-horizon parity is clean for `smac-hard` as well.
 - Keep `B2` as expert opt-in only for controlled performance experiments.
 - Keep `B4` experimental-only with explicit `allow_experimental_transport=True`.
 
