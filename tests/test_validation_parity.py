@@ -9,9 +9,9 @@ from tools.native_core_validation import (
 )
 
 
-def _case(mode: str, trace, *, repeat_idx: int = 0):
+def _case(mode: str, trace, *, repeat_idx: int = 0, profile: str = 'quick'):
     return CaseResult(
-        profile='quick',
+        profile=profile,
         family='smac',
         map_name='3m',
         backend_mode=mode,
@@ -311,4 +311,135 @@ def test_native_option_builder_applies_cli_overrides():
     assert options['foo'] == 1
     assert options['ensure_available_actions'] is True
     assert options['pipeline_step_and_observe'] is False
+
+
+def test_parity_compare_honors_max_steps_window():
+    native_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        },
+        {
+            'step': 1,
+            'actions': [1],
+            'reward': 1.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        },
+    ]
+    bridge_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        },
+        {
+            'step': 1,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        },
+    ]
+    result = _compare_case_pair(
+        native=_case('native', native_trace),
+        bridge=_case('bridge', bridge_trace),
+        atol=1e-6,
+        rtol=1e-6,
+        max_steps=1,
+    )
+    assert result['ok'] is True
+    assert result['steps_compared'] == 1
+
+
+def test_steady_parity_summary_uses_configured_window():
+    bridge_trace = [
+        {
+            'step': 0,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        },
+        {
+            'step': 1,
+            'actions': [1],
+            'reward': 0.0,
+            'terminated': False,
+            'battle_won': False,
+            'episode_limit': False,
+            'dead_allies': 0,
+            'dead_enemies': 0,
+            'obs_shape': [1, 4],
+            'state_shape': [6],
+            'obs_head': [0.0],
+            'state_head': [0.0],
+            'avail_actions': [[0, 1]],
+        },
+    ]
+    native_trace = [
+        dict(bridge_trace[0]),
+        {
+            **dict(bridge_trace[1]),
+            'reward': 3.0,
+        },
+    ]
+    rows = [
+        _case('bridge', bridge_trace, profile='steady'),
+        _case('native', native_trace, profile='steady'),
+    ]
+    parity = _summarize_parity_by_profile(
+        results=rows,
+        atol=1e-6,
+        rtol=1e-6,
+        steady_parity_steps=1,
+    )
+    payload = parity['steady']['smac']
+    assert payload['ok'] is True
+    assert payload['steps_compared'] == 1
 

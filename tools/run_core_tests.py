@@ -171,6 +171,14 @@ TEST_FUNCTIONS = [
         'tests.test_validation_parity',
         'test_native_option_builder_applies_cli_overrides',
     ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_compare_honors_max_steps_window',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_steady_parity_summary_uses_configured_window',
+    ),
 ]
 
 

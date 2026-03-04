@@ -384,6 +384,7 @@ def _compare_case_pair(
     bridge: CaseResult,
     atol: float,
     rtol: float,
+    max_steps: int = 0,
 ) -> Dict[str, Any]:
     required_trace_keys = {
         'step',
@@ -418,6 +419,8 @@ def _compare_case_pair(
         return payload
 
     steps = min(len(native_trace), len(bridge_trace))
+    if int(max_steps) > 0:
+        steps = min(steps, int(max_steps))
     mismatches: list[str] = []
     if len(native_trace) != len(bridge_trace):
         mismatches.append(
@@ -490,6 +493,7 @@ def _summarize_parity_by_profile(
     results: List[CaseResult],
     atol: float,
     rtol: float,
+    steady_parity_steps: int = 0,
 ) -> Dict[str, Dict[str, Dict[str, Any]]]:
     parity_by_profile: Dict[str, Dict[str, Dict[str, Any]]] = {}
     profile_keys = sorted({row.profile for row in results})
@@ -529,6 +533,11 @@ def _summarize_parity_by_profile(
                     bridge=bridge,
                     atol=atol,
                     rtol=rtol,
+                    max_steps=(
+                        steady_parity_steps
+                        if profile == 'steady' and int(steady_parity_steps) > 0
+                        else 0
+                    ),
                 )
                 repeat_results.append(
                     {
@@ -661,6 +670,12 @@ def main() -> int:
         type=int,
         default=20,
         help='Warmup step count for steady profile.',
+    )
+    parser.add_argument(
+        '--steady-parity-steps',
+        type=int,
+        default=3,
+        help='When profile is steady, compare only the first N trace steps for parity (0 disables).',
     )
     parser.add_argument(
         '--parity-atol',
@@ -812,6 +827,7 @@ def main() -> int:
         results=results,
         atol=parity_atol,
         rtol=parity_rtol,
+        steady_parity_steps=max(int(args.steady_parity_steps), 0),
     )
     primary_profile = run_profiles[0][0]
     primary_parity = parity_by_profile.get(primary_profile, {})
@@ -829,6 +845,7 @@ def main() -> int:
         'repeats': repeats,
         'normalized_api': bool(args.normalized_api),
         'native_options': native_options,
+        'steady_parity_steps': max(int(args.steady_parity_steps), 0),
         'profiles': [
             {
                 'name': profile_name,
