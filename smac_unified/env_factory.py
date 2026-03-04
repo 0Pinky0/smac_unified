@@ -188,14 +188,18 @@ def make_env(
         config=backend_config,
     )
     env = backend.make_env(backend_config)
-    if not normalized_api:
-        return env
-
     runtime = opponent_runtime or _default_opponent_runtime(
         family,
         switches,
         opponent_config,
     )
+    if not normalized_api:
+        if hasattr(env, 'set_opponent_runtime'):
+            env.set_opponent_runtime(runtime)
+        if hasattr(env, 'set_runtime_lifecycle_owner'):
+            env.set_runtime_lifecycle_owner('env')
+        return env
+
     return NormalizedEnvAdapter(
         env,
         family=family,
