@@ -1,4 +1,4 @@
-from smac_unified.config import default_switches
+from smac_unified.config import default_switches, merge_switches
 from smac_unified.handlers import (
     AbilityAugmentedActionHandler,
     CapabilityObservationHandler,
@@ -24,9 +24,29 @@ def test_factory_selects_classic_bundle_for_smac():
     assert isinstance(bundle.state_handler, DefaultStateHandler)
 
 
-def test_factory_selects_conic_and_capability_bundle_for_smacv2():
+def test_factory_selects_classic_bundle_for_default_smacv2():
     bundle = build_default_handler_bundle(
         switches=default_switches('smacv2'),
+        map_params=get_map_params('8m'),
+        env_kwargs={'num_fov_actions': 16, 'action_mask': True},
+    )
+    assert isinstance(bundle.action_handler, ClassicActionHandler)
+    assert isinstance(bundle.observation_handler, DefaultObservationHandler)
+    assert isinstance(bundle.state_handler, DefaultStateHandler)
+    assert isinstance(bundle.reward_handler, ClampPositiveRewardHandler)
+
+
+def test_factory_selects_conic_and_capability_bundle_when_overridden():
+    switches = merge_switches(
+        'smacv2',
+        {
+            'action_mode': 'conic_fov',
+            'capability_mode': 'team_gen',
+            'team_init_mode': 'episode_generated',
+        },
+    )
+    bundle = build_default_handler_bundle(
+        switches=switches,
         map_params=get_map_params('8m'),
         env_kwargs={'num_fov_actions': 16, 'action_mask': True},
     )

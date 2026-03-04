@@ -40,11 +40,11 @@ def default_switches(variant: VariantName) -> VariantSwitches:
     if variant == 'smacv2':
         return VariantSwitches(
             variant='smacv2',
-            action_mode='conic_fov',
+            action_mode='classic',
             opponent_mode='sc2_computer',
-            capability_mode='team_gen',
+            capability_mode='none',
             reward_positive_mode='clamp_zero',
-            team_init_mode='episode_generated',
+            team_init_mode='map_default',
         )
     if variant == 'smac-hard':
         return VariantSwitches(

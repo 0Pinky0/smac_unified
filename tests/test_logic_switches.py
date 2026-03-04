@@ -7,6 +7,8 @@ def test_default_switches_have_expected_modes():
     hard = default_switches('smac-hard')
 
     assert smac.opponent_mode == 'sc2_computer'
+    assert smacv2.action_mode == 'classic'
+    assert smacv2.capability_mode == 'none'
     assert smacv2.reward_positive_mode == 'clamp_zero'
     assert hard.action_mode == 'ability_augmented'
 

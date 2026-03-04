@@ -549,10 +549,13 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
 
         if self.use_ability and context.use_ability:
             abilities_by_agent = self._query_agent_abilities(context.env)
-            for ability_id in abilities_by_agent.get(agent_id, ()):
-                if ability_id not in _ABILITY_DICT:
-                    continue
-                perform, ability_code, ability_range = _ABILITY_DICT[ability_id]
+            selected = self._select_ability_config(
+                ability_ids=abilities_by_agent.get(agent_id, ()),
+            )
+            if selected is None:
+                selected = self._fallback_ability_config(unit=unit, context=context)
+            if selected is not None:
+                perform, ability_code, ability_range = selected
                 self._agent_ability_cache[agent_id] = (perform, ability_code, ability_range)
                 mask = self._ability_mask(
                     frame=frame,
@@ -567,7 +570,6 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
                     idx = start + offset
                     if idx < context.n_actions:
                         avail[idx] = flag
-                break
 
         self._avail_actions_cache[agent_id] = avail
         return avail
@@ -696,6 +698,34 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
             return mapping
         except Exception:
             return {}
+
+    @staticmethod
+    def _select_ability_config(
+        *,
+        ability_ids: Sequence[int],
+    ) -> tuple[str, int, float] | None:
+        for ability_id in ability_ids:
+            if ability_id in _ABILITY_DICT:
+                return _ABILITY_DICT[ability_id]
+        return None
+
+    @staticmethod
+    def _fallback_ability_config(
+        *,
+        unit: TrackedUnit,
+        context: HandlerContext,
+    ) -> tuple[str, int, float] | None:
+        ids = context.unit_type_ids
+        fallback_by_type = {
+            getattr(ids, 'marine_id', 0): 380,
+            getattr(ids, 'marauder_id', 0): 253,
+            getattr(ids, 'medivac_id', 0): 2116,
+            getattr(ids, 'stalker_id', 0): 1442,
+        }
+        ability_id = fallback_by_type.get(unit.unit_type)
+        if ability_id is None:
+            return None
+        return _ABILITY_DICT.get(ability_id)
 
     @staticmethod
     def _ability_mask(

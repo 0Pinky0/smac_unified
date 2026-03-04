@@ -55,6 +55,13 @@ class _AbilityProbeHandler(AbilityAugmentedActionHandler):
         return {0: (380,)}
 
 
+class _AbilityFallbackHandler(AbilityAugmentedActionHandler):
+    @staticmethod
+    def _query_agent_abilities(env):
+        del env
+        return {0: (23,)}
+
+
 def _tracked(
     *,
     unit_id: int,
@@ -240,4 +247,37 @@ def test_ability_handler_enables_ability_branch_and_builds_command():
     )
     assert cmd is not None
     assert cmd.action_raw.unit_command.ability_id == 3675
+
+
+def test_ability_handler_falls_back_to_legacy_unit_ability():
+    ally_raw = _RawUnit(tag=1, x=2.0, y=2.0, health=9.0, health_max=10.0)
+    enemy_raw = _RawUnit(tag=101, x=5.0, y=2.0)
+    fake_env = SimpleNamespace(
+        agents={0: ally_raw},
+        enemies={0: enemy_raw},
+    )
+    frame = UnitFrame(
+        allies=_team([_tracked(unit_id=0, tag=1, x=2.0, y=2.0, unit_type=1)]),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=5.0, y=2.0)]),
+        prev_allies_health=np.asarray([45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=4,
+    )
+    context = _context(
+        n_agents=1,
+        n_enemies=1,
+        n_actions=24,
+        n_actions_no_attack=6,
+        attack_slots=1,
+        env=fake_env,
+    )
+    context.ability_padding = 9
+    context.use_ability = True
+
+    handler = _AbilityFallbackHandler(use_ability=True)
+    avail = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
+    ability_action = context.n_actions_no_attack + context.ability_padding
+    assert avail[ability_action] == 1
 

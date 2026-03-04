@@ -41,7 +41,11 @@ TEST_FUNCTIONS = [
     ),
     (
         'tests.test_handler_factory',
-        'test_factory_selects_conic_and_capability_bundle_for_smacv2',
+        'test_factory_selects_classic_bundle_for_default_smacv2',
+    ),
+    (
+        'tests.test_handler_factory',
+        'test_factory_selects_conic_and_capability_bundle_when_overridden',
     ),
     (
         'tests.test_handler_factory',
@@ -58,6 +62,10 @@ TEST_FUNCTIONS = [
     (
         'tests.test_action_parity',
         'test_ability_handler_enables_ability_branch_and_builds_command',
+    ),
+    (
+        'tests.test_action_parity',
+        'test_ability_handler_falls_back_to_legacy_unit_ability',
     ),
     (
         'tests.test_obs_state_parity',
