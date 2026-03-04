@@ -133,7 +133,7 @@ Run lightweight standalone checks in `smacnt`:
 
 ```bash
 conda run -n smacnt python tools/run_core_tests.py
-conda run -n smacnt python tools/native_core_validation.py --steps 3
+conda run -n smacnt python tools/native_core_validation.py --profile quick --steps 3 --warmup-steps 1 --assert-parity
 ```
 
 These validate:
@@ -141,6 +141,8 @@ These validate:
 - switch presets/overrides,
 - scripted runtime compatibility wrapping,
 - native vs bridge core stepping sanity on baseline maps.
+
+`native_core_validation.py` now runs a deterministic bridge-first action trace and replays it on native mode, then compares traces with combined `atol+rtol` tolerance checks and strict key/step alignment. The generated `tools/native_core_validation.json` report includes both parity diagnostics and SPS metrics (`cold_sps` + `steady_sps`).
 
 ## Migration
 
