@@ -142,6 +142,17 @@ def register_maps() -> None:
     _MAPS_REGISTERED = True
 
 
+def resolve_map_directory(*, params: MapParams, opponent_mode: str) -> str:
+    directory = str(params.directory or 'SMAC_Maps')
+    if opponent_mode == 'scripted_pool' and directory == 'SMAC_Maps':
+        return 'new_maps'
+    return directory
+
+
+def resolve_map_filename(*, map_name: str, params: MapParams) -> str:
+    return str(params.filename or map_name)
+
+
 def get_map_params(map_name: str) -> MapParams:
     params = MAP_PARAM_REGISTRY.get(map_name)
     if params is None:

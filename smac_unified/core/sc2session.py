@@ -8,7 +8,7 @@ from typing import Any, List, Sequence
 
 from s2clientprotocol import sc2api_pb2 as sc_pb
 
-from ..maps import MapParams, register_maps
+from ..maps import MapParams, resolve_map_directory, resolve_map_filename
 
 
 RACES = {
@@ -83,6 +83,41 @@ def _ensure_pysc2_compat(source_root: str | None = None) -> None:
             import pysc2  # noqa: F401  # pylint: disable=unused-import
 
 
+def _safe_map_class_name(value: str) -> str:
+    cleaned = ''.join(ch if ch.isalnum() else '_' for ch in str(value))
+    return cleaned or 'Map'
+
+
+def _build_map_spec(config: 'SC2SessionConfig'):
+    from pysc2.maps import lib
+
+    directory = resolve_map_directory(
+        params=config.map_params,
+        opponent_mode=config.opponent_mode,
+    )
+    filename = resolve_map_filename(
+        map_name=config.map_name,
+        params=config.map_params,
+    )
+    class_name = '_'.join(
+        [
+            'SMACUnifiedMap',
+            _safe_map_class_name(config.map_name),
+            _safe_map_class_name(directory),
+            _safe_map_class_name(filename),
+        ]
+    )
+    attrs = {
+        'directory': directory,
+        'filename': filename,
+        'players': 2,
+        'step_mul': int(config.step_mul),
+        'game_steps_per_episode': 0,
+        'download': 'https://github.com/oxwhirl/smac#smac-maps',
+    }
+    return type(class_name, (lib.Map,), attrs)()
+
+
 @dataclass
 class SC2SessionConfig:
     map_name: str
@@ -136,10 +171,10 @@ class SC2EnvRawSession:
                 'Scripted opponent mode requires enable_dual_controller=True.'
             )
         _ensure_pysc2_compat(self.config.source_root)
-        register_maps()
 
         from pysc2.env import sc2_env
 
+        map_spec = _build_map_spec(self.config)
         race_agent = getattr(sc2_env.Race, RACES[self.config.map_params.a_race])
         race_enemy = getattr(sc2_env.Race, RACES[self.config.map_params.b_race])
         difficulty = getattr(
@@ -162,7 +197,7 @@ class SC2EnvRawSession:
             self._num_agents = 1
 
         self._env = sc2_env.SC2Env(
-            map_name=self.config.map_name,
+            map_name=map_spec,
             players=players,
             agent_interface_format=interface,
             step_mul=self.config.step_mul,
