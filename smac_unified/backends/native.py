@@ -58,4 +58,6 @@ class NativeUnifiedBackend:
             env_kwargs=env_kwargs,
             source_root=config.source_root,
             native_options=config.native_options,
+            transport_profile=config.transport_profile,
+            allow_experimental_transport=config.allow_experimental_transport,
         )

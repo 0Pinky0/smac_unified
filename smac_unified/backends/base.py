@@ -14,6 +14,8 @@ class BackendConfig:
     backend_mode: Literal['native', 'bridge', 'auto'] = 'auto'
     native_options: Dict[str, Any] = field(default_factory=dict)
     bridge_options: Dict[str, Any] = field(default_factory=dict)
+    transport_profile: str = 'B0'
+    allow_experimental_transport: bool = False
     logic_switches: Any | None = None
     handler_overrides: Dict[str, Any] = field(default_factory=dict)
 

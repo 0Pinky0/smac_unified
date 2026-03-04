@@ -95,6 +95,8 @@ class SC2SessionConfig:
     pipeline_actions_and_step: bool = False
     pipeline_step_and_observe: bool = False
     reuse_step_observe_requests: bool = False
+    transport_profile: str = 'B0'
+    allow_experimental_transport: bool = False
     opponent_mode: str = 'sc2_computer'
     enable_dual_controller: bool = False
     game_version: str | None = None
@@ -120,6 +122,14 @@ class SC2EnvRawSession:
     def launch(self) -> None:
         if self._env is not None:
             return
+        profile = str(self.config.transport_profile or 'B0').upper()
+        if (
+            profile == 'B4' or not bool(self.config.ensure_available_actions)
+        ) and not bool(self.config.allow_experimental_transport):
+            raise ValueError(
+                'Experimental transport requires allow_experimental_transport=True '
+                '(B4 or ensure_available_actions=False).'
+            )
         _ensure_pysc2_compat(self.config.source_root)
         register_maps()
 

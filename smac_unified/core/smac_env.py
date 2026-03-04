@@ -40,12 +40,16 @@ class SMACEnv:
         env_kwargs: Mapping[str, Any] | None = None,
         source_root: str | None = None,
         native_options: Mapping[str, Any] | None = None,
+        transport_profile: str = 'B0',
+        allow_experimental_transport: bool = False,
     ):
         self.variant = variant
         self.map_name = map_name
         self.capability_config = dict(capability_config or {})
         self._env_kwargs = dict(env_kwargs or {})
         self._native_options = dict(native_options or {})
+        self._transport_profile = str(transport_profile or 'B0').upper()
+        self._allow_experimental_transport = bool(allow_experimental_transport)
         self._source_root = source_root
 
         self.map_params: MapParams = get_map_params(map_name)
@@ -256,6 +260,8 @@ class SMACEnv:
             reuse_step_observe_requests=bool(
                 self._native_options.get('reuse_step_observe_requests', False)
             ),
+            transport_profile=self._transport_profile,
+            allow_experimental_transport=self._allow_experimental_transport,
             opponent_mode=self.switches.opponent_mode,
             enable_dual_controller=bool(
                 self._native_options.get('enable_dual_controller', False)

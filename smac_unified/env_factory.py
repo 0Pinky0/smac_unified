@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, Mapping, Optional
+from typing import Any, Dict, Literal, Mapping, Optional
 
 from .adapters import NormalizedEnvAdapter
 from .backends import (
@@ -18,6 +18,26 @@ from .players import (
     OpponentRuntime,
     build_scripted_runtime_from_config,
 )
+
+_TRANSPORT_PROFILE_OPTIONS: dict[str, dict[str, bool]] = {
+    'B0': {},
+    'B1': {'reuse_step_observe_requests': True},
+    'B2': {
+        'reuse_step_observe_requests': True,
+        'pipeline_step_and_observe': True,
+    },
+    'B3': {
+        'reuse_step_observe_requests': True,
+        'pipeline_step_and_observe': True,
+        'pipeline_actions_and_step': True,
+    },
+    'B4': {
+        'reuse_step_observe_requests': True,
+        'pipeline_step_and_observe': True,
+        'pipeline_actions_and_step': True,
+        'ensure_available_actions': False,
+    },
+}
 
 
 def build_default_backend_registry() -> BackendRegistry:
@@ -43,6 +63,8 @@ class EnvFactoryConfig:
     env_kwargs: Dict[str, Any] = field(default_factory=dict)
     source_root: str | None = None
     backend_mode: str = 'native'
+    transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None
+    allow_experimental_transport: bool = False
     backend_registry: BackendRegistry | None = None
     logic_switches: Dict[str, str] = field(default_factory=dict)
     native_options: Dict[str, Any] = field(default_factory=dict)
@@ -70,6 +92,26 @@ def _default_opponent_runtime(
     return EngineBotOpponentRuntime()
 
 
+def _normalize_transport_profile(value: str | None) -> str:
+    if value is None:
+        return 'B0'
+    profile = str(value).strip().upper()
+    if profile not in _TRANSPORT_PROFILE_OPTIONS:
+        raise ValueError(f'Unsupported transport_profile: {value}')
+    return profile
+
+
+def _merge_native_transport_options(
+    *,
+    transport_profile: str | None,
+    native_options: Mapping[str, Any] | None,
+) -> tuple[str, dict[str, Any]]:
+    profile = _normalize_transport_profile(transport_profile)
+    merged: dict[str, Any] = dict(_TRANSPORT_PROFILE_OPTIONS[profile])
+    merged.update(dict(native_options or {}))
+    return profile, merged
+
+
 def make_env(
     *,
     family: str,
@@ -78,6 +120,8 @@ def make_env(
     capability_config: Optional[Dict[str, Any]] = None,
     source_root: str | None = None,
     backend_mode: str = 'native',
+    transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None,
+    allow_experimental_transport: bool = False,
     backend_registry: BackendRegistry | None = None,
     logic_switches: Mapping[str, str] | None = None,
     native_options: Mapping[str, Any] | None = None,
@@ -119,6 +163,11 @@ def make_env(
     if _has_callable_attr(reward_handler, 'build_step_reward'):
         handler_overrides['reward_handler'] = reward_handler
 
+    resolved_transport_profile, resolved_native_options = _merge_native_transport_options(
+        transport_profile=transport_profile,
+        native_options=native_options,
+    )
+
     backend_config = BackendConfig(
         family=family,
         map_name=map_name,
@@ -126,8 +175,10 @@ def make_env(
         env_kwargs=dict(kwargs),
         source_root=source_root,
         backend_mode=backend_mode,
-        native_options=dict(native_options or {}),
+        native_options=resolved_native_options,
         bridge_options=dict(bridge_options or {}),
+        transport_profile=resolved_transport_profile,
+        allow_experimental_transport=bool(allow_experimental_transport),
         logic_switches=switches,
         handler_overrides=handler_overrides,
     )
@@ -165,6 +216,8 @@ class UnifiedFactory:
             capability_config=config.capability_config,
             source_root=config.source_root,
             backend_mode=config.backend_mode,
+            transport_profile=config.transport_profile,
+            allow_experimental_transport=config.allow_experimental_transport,
             backend_registry=config.backend_registry,
             logic_switches=config.logic_switches,
             native_options=config.native_options,
