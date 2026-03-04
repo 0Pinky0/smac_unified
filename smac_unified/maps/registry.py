@@ -109,6 +109,12 @@ MAP_PARAM_REGISTRY: Dict[str, MapParams] = {
     'mmmt_vs_zspi': MapParams(
         22, 16, 400, 'T', 'P', 4, 'MMM', directory='new_maps'
     ),
+    'unit_test': MapParams(
+        1, 30, 400, 'T', 'T', 0, 'MMM', directory='new_maps'
+    ),
+    'pvt_large': MapParams(
+        58, 30, 2000, 'T', 'P', 7, 'MMM', directory='new_maps'
+    ),
 }
 
 
