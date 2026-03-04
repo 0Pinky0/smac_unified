@@ -343,3 +343,37 @@ def test_ability_query_cache_reuses_same_step_and_invalidates_next_step():
     handler.get_avail_agent_actions(frame=frame_next, context=context, agent_id=0)
     assert handler.query_calls == 2
 
+
+def test_conic_handler_invalidates_same_step_cache_after_fov_change():
+    frame = UnitFrame(
+        allies=_team([_tracked(unit_id=0, tag=1, x=0.0, y=0.0)]),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=0.0, y=4.0)]),
+        prev_allies_health=np.asarray([45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=9,
+    )
+    context = _context(
+        n_agents=1,
+        n_enemies=1,
+        n_actions=11,
+        n_actions_no_attack=10,
+        attack_slots=1,
+    )
+    context.n_fov_actions = 4
+    context.conic_fov_angle = float(np.pi / 2.0)
+    context.action_mask = True
+    context.fov_directions = np.asarray([[1.0, 0.0]], dtype=np.float32)
+    context.canonical_fov_directions = np.asarray(
+        [[1.0, 0.0], [0.0, 1.0], [-1.0, 0.0], [0.0, -1.0]],
+        dtype=np.float32,
+    )
+
+    handler = ConicFovActionHandler(num_fov_actions=4, action_mask=True)
+    avail0 = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
+    assert avail0[10] == 0
+    handler.build_agent_action(frame=frame, context=context, agent_id=0, action=7)
+    avail1 = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
+    assert avail1[10] == 1
+

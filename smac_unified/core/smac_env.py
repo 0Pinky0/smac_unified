@@ -769,13 +769,12 @@ class SMACEnv:
         allies = [u for u in raw_units if u.owner == 1]
         enemies = [u for u in raw_units if u.owner == 2]
         allies_sorted = sorted(allies, key=attrgetter('unit_type', 'pos.x', 'pos.y'))
-        enemies_sorted = sorted(
-            enemies,
-            key=attrgetter('unit_type', 'pos.x', 'pos.y'),
-        )
+        # Legacy SMAC-family envs assign enemy IDs by observed raw order on reset,
+        # then keep those IDs stable via tag updates; avoid per-step enemy sorting.
+        enemies_ordered = list(enemies)
         probe: dict[str, Any] = {
             'allies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in allies_sorted],
-            'enemies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in enemies_sorted],
+            'enemies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in enemies_ordered],
             'ally_health_filter': [],
             'enemy_mask_filter': [],
             'agent_health_levels': self.agent_health_levels.astype(float).tolist(),
@@ -844,7 +843,7 @@ class SMACEnv:
 
         if self.enemy_mask.size > 0:
             filtered_enemies = []
-            for idx, unit in enumerate(enemies_sorted):
+            for idx, unit in enumerate(enemies_ordered):
                 unit_tag = int(getattr(unit, 'tag', -1))
                 if idx >= self.enemy_mask.size:
                     filtered_enemies.append(unit)
@@ -871,11 +870,11 @@ class SMACEnv:
                         'reason': 'pass' if keep else 'masked',
                     }
                 )
-            enemies_sorted = filtered_enemies
+            enemies_ordered = filtered_enemies
         probe['allies_filtered_tags'] = [int(getattr(u, 'tag', -1)) for u in allies_sorted]
-        probe['enemies_filtered_tags'] = [int(getattr(u, 'tag', -1)) for u in enemies_sorted]
+        probe['enemies_filtered_tags'] = [int(getattr(u, 'tag', -1)) for u in enemies_ordered]
         self._last_split_probe = probe
-        return allies_sorted, enemies_sorted
+        return allies_sorted, enemies_ordered
 
     def debug_step_probe(self) -> dict[str, Any]:
         frame = self._unit_frame

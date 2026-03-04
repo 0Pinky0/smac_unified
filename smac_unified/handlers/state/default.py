@@ -102,6 +102,8 @@ def _write_ally_state_row(
     center_x: float,
     center_y: float,
 ) -> None:
+    if not unit.alive:
+        return
     out[start] = unit.health / max(unit.health_max, 1.0)
     out[start + 1] = unit.weapon_cooldown / max(
         _unit_max_cooldown(unit=unit, context=context),
@@ -128,6 +130,8 @@ def _write_enemy_state_row(
     center_x: float,
     center_y: float,
 ) -> None:
+    if not unit.alive:
+        return
     out[start] = unit.health / max(unit.health_max, 1.0)
     out[start + 1] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
     out[start + 2] = (unit.y - center_y) / max(context.max_distance_y, 1.0)

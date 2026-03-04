@@ -350,6 +350,9 @@ class DefaultActionHandler(ActionHandler):
         return targets[: context.attack_slots]
 
     def _unit_shoot_range(self, *, unit_type: int, context: HandlerContext) -> float:
+        action_mode = str(getattr(context.switches, 'action_mode', 'classic'))
+        if action_mode in ('classic', 'ability_augmented'):
+            return 6.0
         ids = self._shoot_range_by_type
         if not ids:
             ids = context.variant_logic.shoot_range_by_type(context.unit_type_ids)
@@ -486,6 +489,10 @@ class ConicFovActionHandler(DefaultActionHandler):
                 fov_idx = action - 6
                 if 0 <= fov_idx < len(context.canonical_fov_directions):
                     context.fov_directions[agent_id] = context.canonical_fov_directions[fov_idx]
+                    # FOV direction changed within the same frame; invalidate the
+                    # cached mask for this agent so subsequent same-step reads are
+                    # consistent with the updated cone direction.
+                    self._avail_actions_cache.pop(agent_id, None)
             return None
 
         return super().build_agent_action(

@@ -98,6 +98,27 @@ native_options = json.loads(sys.argv[10]) if sys.argv[10] else {}
 capture_debug_probe = bool(native_options.get("capture_debug_probe", False))
 warmup_steps = max(0, min(warmup_steps, steps))
 
+def _probe_unit_slots(mapping):
+    if not isinstance(mapping, dict):
+        return []
+    payload = []
+    for slot in sorted(mapping.keys()):
+        unit = mapping.get(slot)
+        if unit is None:
+            continue
+        pos = getattr(unit, "pos", None)
+        payload.append(
+            {
+                "slot": int(slot),
+                "tag": int(getattr(unit, "tag", -1)),
+                "unit_type": int(getattr(unit, "unit_type", 0)),
+                "health": float(getattr(unit, "health", 0.0)),
+                "x": float(getattr(pos, "x", getattr(unit, "x", 0.0))),
+                "y": float(getattr(pos, "y", getattr(unit, "y", 0.0))),
+            }
+        )
+    return payload
+
 t0 = time.perf_counter()
 env = make_env(
     family=family,
@@ -179,6 +200,14 @@ for step_idx in range(steps):
                 debug_probe = probe_payload
         except Exception:
             debug_probe = {"error": "debug_step_probe_failed"}
+    elif capture_debug_probe:
+        try:
+            debug_probe = {
+                "agent_slots": _probe_unit_slots(getattr(env, "agents", {})),
+                "enemy_slots": _probe_unit_slots(getattr(env, "enemies", {})),
+            }
+        except Exception:
+            debug_probe = {"error": "generic_debug_probe_failed"}
     trace.append({
         "step": int(step_idx),
         "actions": list(map(int, chosen)),

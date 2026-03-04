@@ -62,7 +62,7 @@ class DefaultObservationHandler(ObservationHandler):
             if not enemy.alive:
                 continue
             dist = _distance(unit.x, unit.y, enemy.x, enemy.y)
-            if dist > sight_range:
+            if dist >= sight_range:
                 continue
             slot_start = enemy_start + slot * enemy_dim
             feat_cursor = slot_start
@@ -97,7 +97,7 @@ class DefaultObservationHandler(ObservationHandler):
             feat_cursor = slot_start
             if ally.alive:
                 dist = _distance(unit.x, unit.y, ally.x, ally.y)
-                if dist <= sight_range:
+                if dist < sight_range:
                     obs[feat_cursor] = 1.0
                     feat_cursor += 1
                     obs[feat_cursor] = dist / max(sight_range, 1.0)

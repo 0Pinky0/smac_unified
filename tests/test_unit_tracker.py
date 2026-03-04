@@ -71,7 +71,7 @@ def test_unit_tracker_keeps_stable_ids_across_updates():
     )
 
     assert [u.tag for u in frame0.allies.units] == [10, 20, 30]
-    assert [u.tag for u in frame0.enemies.units] == [100, 101]
+    assert [u.tag for u in frame0.enemies.units] == [101, 100]
 
     frame1 = tracker.update(
         allies=[
@@ -105,7 +105,7 @@ def test_unit_tracker_debug_probe_exposes_slot_tags_and_alive_flags():
     probe0 = tracker.debug_probe()
     assert probe0['step_token'] == 0
     assert [row['tag'] for row in probe0['ally_slots']] == [10, 20]
-    assert [row['tag'] for row in probe0['enemy_slots']] == [100, 200]
+    assert [row['tag'] for row in probe0['enemy_slots']] == [200, 100]
 
     tracker.update(
         allies=[_unit(tag=10, unit_type=1, x=1.5, y=1.0)],

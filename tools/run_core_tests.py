@@ -76,6 +76,10 @@ TEST_FUNCTIONS = [
         'test_ability_query_cache_reuses_same_step_and_invalidates_next_step',
     ),
     (
+        'tests.test_action_parity',
+        'test_conic_handler_invalidates_same_step_cache_after_fov_change',
+    ),
+    (
         'tests.test_obs_state_parity',
         'test_observation_handler_restores_structured_feature_toggles',
     ),
@@ -94,6 +98,14 @@ TEST_FUNCTIONS = [
     (
         'tests.test_obs_state_parity',
         'test_state_handler_preserves_flattened_team_layout',
+    ),
+    (
+        'tests.test_obs_state_parity',
+        'test_observation_handler_hides_enemy_at_exact_sight_range_boundary',
+    ),
+    (
+        'tests.test_obs_state_parity',
+        'test_state_handler_zeroes_dead_unit_rows',
     ),
     (
         'tests.test_reward_outcome_parity',
@@ -118,6 +130,10 @@ TEST_FUNCTIONS = [
     (
         'tests.test_reset_capability_parity',
         'test_stochastic_attack_probability_can_block_attack_command',
+    ),
+    (
+        'tests.test_reset_capability_parity',
+        'test_split_raw_units_preserves_enemy_observed_order_for_slot_mapping',
     ),
     (
         'tests.test_api_parity',

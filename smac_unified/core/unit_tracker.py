@@ -72,11 +72,13 @@ class UnitTracker:
             units=allies,
             n_slots=self.n_units,
             owner=1,
+            preserve_observed_order=False,
         )
         self._enemy_units = self._seed_team_units(
             units=enemies,
             n_slots=self.n_enemy_units,
             owner=2,
+            preserve_observed_order=True,
         )
         self._prev_ally_health = self._team_health(self._ally_units)
         self._prev_ally_shield = self._team_shield(self._ally_units)
@@ -99,11 +101,13 @@ class UnitTracker:
             current=self._ally_units,
             observed=allies,
             owner=1,
+            preserve_observed_order=False,
         )
         self._enemy_units = self._update_team_units(
             current=self._enemy_units,
             observed=enemies,
             owner=2,
+            preserve_observed_order=True,
         )
         self._step_token += 1
         return self.frame()
@@ -152,8 +156,9 @@ class UnitTracker:
         units: Sequence[object],
         n_slots: int,
         owner: int,
+        preserve_observed_order: bool,
     ) -> list[TrackedUnit]:
-        ordered = self._sorted_units(units)
+        ordered = list(units) if preserve_observed_order else self._sorted_units(units)
         tracked: list[TrackedUnit] = []
         for unit_id in range(n_slots):
             raw_unit = ordered[unit_id] if unit_id < len(ordered) else None
@@ -174,6 +179,7 @@ class UnitTracker:
         current: Sequence[TrackedUnit],
         observed: Sequence[object],
         owner: int,
+        preserve_observed_order: bool,
     ) -> list[TrackedUnit]:
         by_tag = self.tag_lookup(observed)
         consumed: set[int] = set()
@@ -193,7 +199,8 @@ class UnitTracker:
                 )
             )
 
-        extras = [u for u in self._sorted_units(observed) if u.tag not in consumed]
+        ordered = list(observed) if preserve_observed_order else self._sorted_units(observed)
+        extras = [u for u in ordered if u.tag not in consumed]
         if extras:
             for idx, prev in enumerate(updated):
                 if prev.tag >= 0:
@@ -270,6 +277,8 @@ class UnitTracker:
                 'unit_type': int(unit.unit_type),
                 'alive': bool(unit.alive),
                 'health': float(unit.health),
+                'x': float(unit.x),
+                'y': float(unit.y),
             }
             for idx, unit in enumerate(units)
         ]
