@@ -96,3 +96,31 @@ def test_seed_supports_getter_setter_and_rng_reseed():
     assert np.allclose(first, second)
     assert env._session.config.seed == 123
 
+
+def test_last_action_update_is_in_place_one_hot():
+    env = SMACEnv(variant='smac', map_name='3m')
+    before = env.last_action
+    action_ids = [1] * env.n_agents
+    env._update_last_action_matrix(action_ids)
+    assert env.last_action is before
+    assert np.allclose(env.last_action.sum(axis=1), np.ones(env.n_agents))
+    assert np.allclose(env.last_action[:, 1], np.ones(env.n_agents))
+
+
+def test_handler_context_refresh_reuses_instance():
+    env = SMACEnv(variant='smac', map_name='3m')
+    env._episode_steps = 2
+    env._refresh_handler_context()
+    ctx = env._handler_context
+    assert ctx is not None
+    assert ctx.episode_step == 2
+
+    env._episode_steps = 5
+    env.max_distance_x = 77.0
+    env._update_last_action_matrix([0] * env.n_agents)
+    env._refresh_handler_context()
+    assert env._handler_context is ctx
+    assert ctx.episode_step == 5
+    assert np.isclose(ctx.max_distance_x, 77.0)
+    assert ctx.last_action is env.last_action
+

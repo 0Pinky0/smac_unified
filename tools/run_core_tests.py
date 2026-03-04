@@ -136,6 +136,14 @@ TEST_FUNCTIONS = [
         'test_seed_supports_getter_setter_and_rng_reseed',
     ),
     (
+        'tests.test_api_parity',
+        'test_last_action_update_is_in_place_one_hot',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_handler_context_refresh_reuses_instance',
+    ),
+    (
         'tests.test_validation_parity',
         'test_parity_compare_passes_for_matching_traces',
     ),

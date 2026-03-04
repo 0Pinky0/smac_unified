@@ -204,7 +204,7 @@ class SMACEnv:
         self.max_reward = 0.0
         self.reward = 0.0
         self.last_action = np.zeros((self.n_agents, self.n_actions), dtype=np.float32)
-        self._action_eye = np.eye(self.n_actions, dtype=np.float32)
+        self._agent_row_index = np.arange(self.n_agents, dtype=np.int64)
         self.pathing_grid: np.ndarray | None = None
         self.terrain_height: np.ndarray | None = None
         self.agent_attack_probabilities = np.ones(self.n_agents, dtype=np.float32)
@@ -342,7 +342,7 @@ class SMACEnv:
         if len(actions_int) < self.n_agents:
             actions_int.extend([0] * (self.n_agents - len(actions_int)))
         actions_int = actions_int[: self.n_agents]
-        self.last_action = self._action_eye[np.asarray(actions_int, dtype=np.int64)]
+        self._update_last_action_matrix(actions_int)
         self._refresh_handler_context()
 
         ally_sc_actions: List[Any] = []
@@ -682,55 +682,77 @@ class SMACEnv:
         except Exception:
             return
 
+    def _update_last_action_matrix(self, actions: Sequence[int]) -> None:
+        action_idx = np.asarray(actions, dtype=np.int64)
+        self.last_action.fill(0.0)
+        self.last_action[self._agent_row_index, action_idx] = 1.0
+
     def _refresh_handler_context(self) -> None:
-        self._handler_context = HandlerContext(
-            family=self.variant,
-            map_name=self.map_name,
-            episode_step=self._episode_steps,
-            n_agents=self.n_agents,
-            n_enemies=self.n_enemies,
-            n_actions=self.n_actions,
-            n_actions_no_attack=self.n_actions_no_attack,
-            attack_slots=self._attack_slots,
-            move_amount=self._move_amount,
-            map_x=self.map_x,
-            map_y=self.map_y,
-            max_distance_x=self.max_distance_x,
-            max_distance_y=self.max_distance_y,
-            state_last_action=self.state_last_action,
-            last_action=self.last_action,
-            reward_sparse=self.reward_sparse,
-            reward_only_positive=self.reward_only_positive,
-            reward_death_value=self.reward_death_value,
-            reward_negative_scale=self.reward_negative_scale,
-            reward_scale=self.reward_scale,
-            reward_scale_rate=self.reward_scale_rate,
-            max_reward=self.max_reward,
-            variant_logic=self._variant_logic,
-            unit_type_ids=self._unit_ids,
-            switches=self.switches,
-            env=self,
-            pathing_grid=self.pathing_grid,
-            terrain_height=self.terrain_height,
-            n_fov_actions=self._n_fov_actions,
-            conic_fov_angle=self._conic_fov_angle,
-            fov_directions=self.fov_directions,
-            canonical_fov_directions=self.canonical_fov_directions,
-            action_mask=self._action_mask,
-            ability_padding=self._ability_padding,
-            use_ability=self._use_ability,
-            obs_all_health=self.obs_all_health,
-            obs_own_health=self.obs_own_health,
-            obs_last_action=self.obs_last_action,
-            obs_pathing_grid=self.obs_pathing_grid,
-            obs_terrain_height=self.obs_terrain_height,
-            obs_timestep_number=self.obs_timestep_number,
-            state_timestep_number=self.state_timestep_number,
-            obs_instead_of_state=self.obs_instead_of_state,
-            shield_bits_ally=self.shield_bits_ally,
-            shield_bits_enemy=self.shield_bits_enemy,
-            unit_type_bits=self.unit_type_bits,
-        )
+        if self._handler_context is None:
+            self._handler_context = HandlerContext(
+                family=self.variant,
+                map_name=self.map_name,
+                episode_step=self._episode_steps,
+                n_agents=self.n_agents,
+                n_enemies=self.n_enemies,
+                n_actions=self.n_actions,
+                n_actions_no_attack=self.n_actions_no_attack,
+                attack_slots=self._attack_slots,
+                move_amount=self._move_amount,
+                map_x=self.map_x,
+                map_y=self.map_y,
+                max_distance_x=self.max_distance_x,
+                max_distance_y=self.max_distance_y,
+                state_last_action=self.state_last_action,
+                last_action=self.last_action,
+                reward_sparse=self.reward_sparse,
+                reward_only_positive=self.reward_only_positive,
+                reward_death_value=self.reward_death_value,
+                reward_negative_scale=self.reward_negative_scale,
+                reward_scale=self.reward_scale,
+                reward_scale_rate=self.reward_scale_rate,
+                max_reward=self.max_reward,
+                variant_logic=self._variant_logic,
+                unit_type_ids=self._unit_ids,
+                switches=self.switches,
+                env=self,
+                pathing_grid=self.pathing_grid,
+                terrain_height=self.terrain_height,
+                n_fov_actions=self._n_fov_actions,
+                conic_fov_angle=self._conic_fov_angle,
+                fov_directions=self.fov_directions,
+                canonical_fov_directions=self.canonical_fov_directions,
+                action_mask=self._action_mask,
+                ability_padding=self._ability_padding,
+                use_ability=self._use_ability,
+                obs_all_health=self.obs_all_health,
+                obs_own_health=self.obs_own_health,
+                obs_last_action=self.obs_last_action,
+                obs_pathing_grid=self.obs_pathing_grid,
+                obs_terrain_height=self.obs_terrain_height,
+                obs_timestep_number=self.obs_timestep_number,
+                state_timestep_number=self.state_timestep_number,
+                obs_instead_of_state=self.obs_instead_of_state,
+                shield_bits_ally=self.shield_bits_ally,
+                shield_bits_enemy=self.shield_bits_enemy,
+                unit_type_bits=self.unit_type_bits,
+            )
+            return
+
+        ctx = self._handler_context
+        ctx.episode_step = self._episode_steps
+        ctx.map_x = self.map_x
+        ctx.map_y = self.map_y
+        ctx.max_distance_x = self.max_distance_x
+        ctx.max_distance_y = self.max_distance_y
+        ctx.last_action = self.last_action
+        ctx.max_reward = self.max_reward
+        ctx.unit_type_ids = self._unit_ids
+        ctx.env = self
+        ctx.pathing_grid = self.pathing_grid
+        ctx.terrain_height = self.terrain_height
+        ctx.fov_directions = self.fov_directions
+        ctx.canonical_fov_directions = self.canonical_fov_directions
 
     def _split_raw_units(self) -> tuple[list[Any], list[Any]]:
         if self._obs is None:
