@@ -1,6 +1,6 @@
 """Standalone unified entry points for SMAC-family environments."""
 
-from .adapters import NormalizedEnvAdapter
+from .adapters import NormalizedEnvAdapter, VectorEnvPool
 from .handlers import (
     AbilityAugmentedActionHandler,
     AbsolutePositiveRewardHandler,
@@ -42,6 +42,7 @@ from .env_factory import (
     EnvFactoryConfig,
     UnifiedFactory,
     make_env,
+    make_env_pool,
 )
 from .core import (
     SMACEnv,
@@ -86,6 +87,7 @@ __all__ = [
     'ObservationHandler',
     'OpponentMode',
     'NormalizedEnvAdapter',
+    'VectorEnvPool',
     'OpponentEpisodeContext',
     'OpponentPolicy',
     'OpponentRuntime',
@@ -113,5 +115,6 @@ __all__ = [
     'default_switches',
     'entries_for_block',
     'make_env',
+    'make_env_pool',
     'merge_switches',
 ]

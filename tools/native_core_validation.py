@@ -13,6 +13,8 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Dict, List
 
+import numpy as np
+
 
 def _ensure_project_on_path() -> None:
     root = Path(__file__).resolve().parents[1]
@@ -52,8 +54,204 @@ class CaseResult:
     steady_latency_ms_p50: float = 0.0
     steady_latency_ms_p95: float = 0.0
     steady_latency_ms_p99: float = 0.0
+    parallel_envs: int = 1
+    pool_mode: str = 'sync'
     trace: list[dict[str, Any]] | None = None
     error: str = ''
+
+
+def _run_case_parallel_native(
+    *,
+    profile: str,
+    family: str,
+    map_name: str,
+    repeat_idx: int,
+    steps: int,
+    warmup_steps: int,
+    seed: int,
+    forced_actions: list[list[int]] | None,
+    normalized_api: bool,
+    native_options: dict[str, Any],
+    parallel_envs: int,
+    pool_mode: str,
+) -> CaseResult:
+    from smac_unified import make_env_pool
+
+    parallel_envs = max(1, int(parallel_envs))
+    warmup_steps = max(0, min(warmup_steps, steps))
+    t0 = time.perf_counter()
+    pool = make_env_pool(
+        num_envs=parallel_envs,
+        family=family,
+        map_name=map_name,
+        normalized_api=normalized_api,
+        native_options=native_options,
+        pool_mode=pool_mode,
+        seed=seed,
+    )
+    try:
+        if normalized_api:
+            pool.reset(seeds=[seed + idx for idx in range(parallel_envs)])
+        else:
+            pool.reset()
+        t_reset = time.perf_counter()
+        step_elapsed = 0.0
+        steady_elapsed = 0.0
+        steady_steps = 0
+        step_latencies_ms: list[float] = []
+        steady_latencies_ms: list[float] = []
+        trace: list[dict[str, Any]] = []
+
+        for step_idx in range(steps):
+            forced_step = (
+                forced_actions[step_idx]
+                if forced_actions is not None and step_idx < len(forced_actions)
+                else None
+            )
+            batch_actions: list[list[int]] = []
+            for env in pool.envs:
+                chosen: list[int] = []
+                for agent_id in range(env.n_agents):
+                    avail = list(env.get_avail_agent_actions(agent_id))
+                    action = 0
+                    if forced_step is not None and agent_id < len(forced_step):
+                        forced = int(forced_step[agent_id])
+                        if 0 <= forced < len(avail) and avail[forced]:
+                            action = forced
+                        else:
+                            for idx, flag in enumerate(avail):
+                                if flag and idx != 0:
+                                    action = idx
+                                    break
+                    else:
+                        for idx, flag in enumerate(avail):
+                            if flag and idx != 0:
+                                action = idx
+                                break
+                    chosen.append(action)
+                batch_actions.append(chosen)
+
+            t_step0 = time.perf_counter()
+            step_rows = pool.step(batch_actions)
+            t_step1 = time.perf_counter()
+            dt = max(t_step1 - t_step0, 0.0)
+            step_elapsed += dt
+            dt_ms = dt * 1000.0
+            step_latencies_ms.append(dt_ms)
+            if step_idx >= warmup_steps:
+                steady_elapsed += dt
+                steady_steps += 1
+                steady_latencies_ms.append(dt_ms)
+
+            first_env = pool.envs[0]
+            if normalized_api:
+                first_row = step_rows[0]
+                reward = float(first_row.reward)
+                terminated = bool(first_row.terminated)
+                info = dict(first_row.info)
+                obs = np.asarray(first_row.obs, dtype=np.float32)
+                state = np.asarray(first_row.state, dtype=np.float32)
+                avail_actions = np.asarray(first_row.avail_actions, dtype=np.int64).tolist()
+            else:
+                first_row = step_rows[0]
+                reward = float(first_row[0])
+                terminated = bool(first_row[1])
+                info = dict(first_row[2])
+                obs = np.asarray(first_env.get_obs(), dtype=np.float32)
+                state = np.asarray(first_env.get_state(), dtype=np.float32)
+                avail_actions = [
+                    list(map(int, first_env.get_avail_agent_actions(agent_id)))
+                    for agent_id in range(first_env.n_agents)
+                ]
+
+            trace.append(
+                {
+                    'step': int(step_idx),
+                    'actions': list(map(int, batch_actions[0])),
+                    'reward': reward,
+                    'terminated': terminated,
+                    'battle_won': bool(info.get('battle_won', False)),
+                    'episode_limit': bool(info.get('episode_limit', False)),
+                    'dead_allies': int(info.get('dead_allies', -1)),
+                    'dead_enemies': int(info.get('dead_enemies', -1)),
+                    'obs_shape': list(obs.shape),
+                    'state_shape': list(state.shape),
+                    'obs_head': obs.flatten()[:8].astype(float).tolist(),
+                    'state_head': state.flatten()[:8].astype(float).tolist(),
+                    'avail_actions': avail_actions,
+                }
+            )
+
+        t_close0 = time.perf_counter()
+        pool.close()
+        t_end = time.perf_counter()
+    except Exception as exc:
+        try:
+            pool.close()
+        except Exception:
+            pass
+        elapsed_total = max(time.perf_counter() - t0, 1e-9)
+        return CaseResult(
+            profile=profile,
+            family=family,
+            map_name=map_name,
+            backend_mode='native',
+            repeat_idx=repeat_idx,
+            ok=False,
+            elapsed_s=elapsed_total,
+            steps=steps,
+            sps=0.0,
+            warmup_steps=warmup_steps,
+            parallel_envs=parallel_envs,
+            pool_mode=str(pool_mode),
+            error=str(exc)[:400],
+        )
+
+    elapsed = max(t_end - t0, 1e-9)
+    startup = max(t_reset - t0, 0.0)
+    close_s = max(t_end - t_close0, 0.0)
+    total_step_count = int(steps * parallel_envs)
+    steady_total_steps = int(steady_steps * parallel_envs)
+    step_sps = total_step_count / max(step_elapsed, 1e-9)
+    steady_sps = (
+        steady_total_steps / max(steady_elapsed, 1e-9)
+        if steady_steps > 0
+        else 0.0
+    )
+
+    def _pct(values: list[float], q: int) -> float:
+        if not values:
+            return 0.0
+        return float(np.percentile(np.asarray(values, dtype=np.float64), q))
+
+    return CaseResult(
+        profile=profile,
+        family=family,
+        map_name=map_name,
+        backend_mode='native',
+        repeat_idx=repeat_idx,
+        ok=True,
+        elapsed_s=elapsed,
+        steps=steps,
+        sps=total_step_count / max(elapsed, 1e-9),
+        startup_s=startup,
+        step_elapsed_s=step_elapsed,
+        step_sps=step_sps,
+        close_s=close_s,
+        warmup_steps=warmup_steps,
+        steady_steps=steady_steps,
+        steady_elapsed_s=steady_elapsed,
+        steady_sps=steady_sps,
+        step_latency_ms_p50=_pct(step_latencies_ms, 50),
+        step_latency_ms_p95=_pct(step_latencies_ms, 95),
+        step_latency_ms_p99=_pct(step_latencies_ms, 99),
+        steady_latency_ms_p50=_pct(steady_latencies_ms, 50),
+        steady_latency_ms_p95=_pct(steady_latencies_ms, 95),
+        steady_latency_ms_p99=_pct(steady_latencies_ms, 99),
+        parallel_envs=parallel_envs,
+        pool_mode=str(pool_mode),
+        trace=trace,
+    )
 
 
 def _run_case(
@@ -69,9 +267,26 @@ def _run_case(
     forced_actions: list[list[int]] | None,
     normalized_api: bool,
     native_options: dict[str, Any],
+    parallel_envs: int,
+    pool_mode: str,
     make_env_fn,
 ) -> CaseResult:
     del make_env_fn
+    if backend_mode == 'native' and int(parallel_envs) > 1:
+        return _run_case_parallel_native(
+            profile=profile,
+            family=family,
+            map_name=map_name,
+            repeat_idx=repeat_idx,
+            steps=steps,
+            warmup_steps=warmup_steps,
+            seed=seed,
+            forced_actions=forced_actions,
+            normalized_api=normalized_api,
+            native_options=native_options,
+            parallel_envs=int(parallel_envs),
+            pool_mode=str(pool_mode),
+        )
     runner = """
 import json
 import sys
@@ -97,6 +312,8 @@ forced_actions = json.loads(sys.argv[7]) if sys.argv[7] else None
 seed = int(sys.argv[8])
 normalized_api = bool(int(sys.argv[9]))
 native_options = json.loads(sys.argv[10]) if sys.argv[10] else {}
+parallel_envs = int(sys.argv[11])
+pool_mode = sys.argv[12]
 capture_debug_probe = bool(native_options.get("capture_debug_probe", False))
 warmup_steps = max(0, min(warmup_steps, steps))
 
@@ -271,6 +488,8 @@ print(json.dumps({
     "steady_latency_ms_p50": _pct(steady_latencies_ms, 50),
     "steady_latency_ms_p95": _pct(steady_latencies_ms, 95),
     "steady_latency_ms_p99": _pct(steady_latencies_ms, 99),
+    "parallel_envs": parallel_envs,
+    "pool_mode": pool_mode,
     "trace": trace,
 }))
 """
@@ -290,6 +509,8 @@ print(json.dumps({
             str(int(seed)),
             '1' if normalized_api else '0',
             json.dumps(native_options),
+            str(int(parallel_envs)),
+            str(pool_mode),
         ],
         capture_output=True,
         text=True,
@@ -308,6 +529,8 @@ print(json.dumps({
             steps=steps,
             sps=0.0,
             warmup_steps=warmup_steps,
+            parallel_envs=int(parallel_envs),
+            pool_mode=str(pool_mode),
             error=error.splitlines()[-1][:400],
         )
 
@@ -343,6 +566,8 @@ print(json.dumps({
         steady_latency_ms_p50=float(payload.get('steady_latency_ms_p50', 0.0)),
         steady_latency_ms_p95=float(payload.get('steady_latency_ms_p95', 0.0)),
         steady_latency_ms_p99=float(payload.get('steady_latency_ms_p99', 0.0)),
+        parallel_envs=int(payload.get('parallel_envs', parallel_envs)),
+        pool_mode=str(payload.get('pool_mode', pool_mode)),
         trace=list(payload.get('trace', []) or []),
     )
 
@@ -1018,12 +1243,28 @@ def main() -> int:
         action='store_true',
         help='Include per-step unit ordering/mask debug probe payloads in traces.',
     )
+    parser.add_argument(
+        '--parallel-envs',
+        type=int,
+        default=1,
+        help='Number of native env instances per case (native lane only).',
+    )
+    parser.add_argument(
+        '--pool-mode',
+        choices=['sync', 'thread'],
+        default='sync',
+        help='Execution mode for native pooled runs when --parallel-envs > 1.',
+    )
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
     repeats = max(int(args.repeats), 1)
+    parallel_envs = max(int(args.parallel_envs), 1)
     bridge_enabled = str(args.bridge_lane).strip().lower() == 'on'
     if bool(args.assert_parity) and not bridge_enabled:
         print('--assert-parity requires --bridge-lane=on', file=sys.stderr)
+        return 2
+    if bool(args.assert_parity) and parallel_envs > 1:
+        print('--assert-parity requires --parallel-envs=1', file=sys.stderr)
         return 2
     try:
         native_options = _build_native_options(args)
@@ -1060,6 +1301,8 @@ def main() -> int:
                         forced_actions=None,
                         normalized_api=bool(args.normalized_api),
                         native_options=native_options,
+                        parallel_envs=1,
+                        pool_mode='sync',
                         make_env_fn=make_env,
                     )
                     results.append(bridge_row)
@@ -1067,6 +1310,7 @@ def main() -> int:
                     print(
                         f'[{bridge_status}] profile={profile_name} family={family} '
                         f'repeat={repeat_idx} mode=bridge map={map_name} '
+                        f'envs={bridge_row.parallel_envs} pool={bridge_row.pool_mode} '
                         f'cold_sps={bridge_row.sps:.3f} steady_sps={bridge_row.steady_sps:.3f} '
                         f'p95_ms={bridge_row.step_latency_ms_p95:.3f} elapsed={bridge_row.elapsed_s:.3f}s '
                         f'error={bridge_row.error}'
@@ -1088,6 +1332,8 @@ def main() -> int:
                     forced_actions=forced_actions,
                     normalized_api=bool(args.normalized_api),
                     native_options=native_options,
+                    parallel_envs=parallel_envs,
+                    pool_mode=str(args.pool_mode),
                     make_env_fn=make_env,
                 )
                 results.append(native_row)
@@ -1095,6 +1341,7 @@ def main() -> int:
                 print(
                     f'[{native_status}] profile={profile_name} family={family} '
                     f'repeat={repeat_idx} mode=native map={map_name} '
+                    f'envs={native_row.parallel_envs} pool={native_row.pool_mode} '
                     f'cold_sps={native_row.sps:.3f} steady_sps={native_row.steady_sps:.3f} '
                     f'p95_ms={native_row.step_latency_ms_p95:.3f} elapsed={native_row.elapsed_s:.3f}s '
                     f'error={native_row.error}'
@@ -1134,6 +1381,8 @@ def main() -> int:
         'seed': int(args.seed),
         'repeats': repeats,
         'normalized_api': bool(args.normalized_api),
+        'parallel_envs': parallel_envs,
+        'pool_mode': str(args.pool_mode),
         'native_options': native_options,
         'steady_parity_mode': str(args.steady_parity_mode),
         'steady_parity_steps': max(int(args.steady_parity_steps), 0),

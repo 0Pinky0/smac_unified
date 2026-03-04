@@ -75,6 +75,18 @@ TEST_FUNCTIONS = [
         'test_session_rejects_submit_when_previous_step_is_pending',
     ),
     (
+        'tests.test_vector_pool',
+        'test_vector_env_pool_sync_mode_runs_reset_step_and_close',
+    ),
+    (
+        'tests.test_vector_pool',
+        'test_vector_env_pool_thread_mode_runs_step_batch',
+    ),
+    (
+        'tests.test_vector_pool',
+        'test_make_env_pool_offsets_seed_per_env_instance',
+    ),
+    (
         'tests.test_native_builders',
         'test_action_handler_avail_masks_are_deterministic',
     ),

@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, Literal, Mapping, Optional
 
-from .adapters import NormalizedEnvAdapter
+from .adapters import NormalizedEnvAdapter, VectorEnvPool
 from .config import VariantSwitches, default_switches
 from .core import SMACEnv
 from .players import (
@@ -219,6 +219,66 @@ class UnifiedFactory:
             opponent_config=config.opponent_config,
             **config.resolved_env_kwargs(),
         )
+
+
+def make_env_pool(
+    *,
+    num_envs: int,
+    family: str,
+    map_name: str = '8m',
+    normalized_api: bool = True,
+    capability_config: Optional[Dict[str, Any]] = None,
+    source_root: str | None = None,
+    transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None,
+    allow_experimental_transport: bool = False,
+    logic_switches: Mapping[str, str] | None = None,
+    native_options: Mapping[str, Any] | None = None,
+    observation_handler: Any | None = None,
+    state_handler: Any | None = None,
+    reward_handler: Any | None = None,
+    action_handler: Any | None = None,
+    opponent_runtime: OpponentRuntime | None = None,
+    opponent_config: Mapping[str, Any] | None = None,
+    pool_mode: Literal['sync', 'thread'] = 'sync',
+    pool_max_workers: int | None = None,
+    **kwargs,
+):
+    env_count = int(num_envs)
+    if env_count <= 0:
+        raise ValueError('num_envs must be >= 1')
+
+    base_kwargs = dict(kwargs)
+    base_seed = base_kwargs.get('seed')
+
+    def _build_env(index: int):
+        env_kwargs = dict(base_kwargs)
+        if base_seed is not None:
+            env_kwargs['seed'] = int(base_seed) + int(index)
+        return make_env(
+            family=family,
+            map_name=map_name,
+            normalized_api=normalized_api,
+            capability_config=capability_config,
+            source_root=source_root,
+            transport_profile=transport_profile,
+            allow_experimental_transport=allow_experimental_transport,
+            logic_switches=logic_switches,
+            native_options=native_options,
+            observation_handler=observation_handler,
+            state_handler=state_handler,
+            reward_handler=reward_handler,
+            action_handler=action_handler,
+            opponent_runtime=opponent_runtime,
+            opponent_config=opponent_config,
+            **env_kwargs,
+        )
+
+    env_fns = [lambda idx=idx: _build_env(idx) for idx in range(env_count)]
+    return VectorEnvPool(
+        env_fns=env_fns,
+        mode=pool_mode,
+        max_workers=pool_max_workers,
+    )
 
 
 def _has_callable_attr(value: Any, name: str) -> bool:
