@@ -598,3 +598,16 @@ def test_parity_compare_records_first_mismatch_detail_values():
     assert detail['native'] == 1.25
     assert detail['bridge'] == 0.5
 
+
+def test_native_option_builder_can_enable_capture_debug_probe():
+    args = SimpleNamespace(
+        native_options_json='{}',
+        ensure_available_actions='default',
+        pipeline_actions_and_step='default',
+        pipeline_step_and_observe='default',
+        reuse_step_observe_requests='default',
+        capture_debug_probe=True,
+    )
+    options = _build_native_options(args)
+    assert options['capture_debug_probe'] is True
+

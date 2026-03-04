@@ -95,6 +95,7 @@ forced_actions = json.loads(sys.argv[7]) if sys.argv[7] else None
 seed = int(sys.argv[8])
 normalized_api = bool(int(sys.argv[9]))
 native_options = json.loads(sys.argv[10]) if sys.argv[10] else {}
+capture_debug_probe = bool(native_options.get("capture_debug_probe", False))
 warmup_steps = max(0, min(warmup_steps, steps))
 
 t0 = time.perf_counter()
@@ -170,6 +171,14 @@ for step_idx in range(steps):
         steady_elapsed += dt
         steady_steps += 1
         steady_latencies_ms.append(dt_ms)
+    debug_probe = {}
+    if capture_debug_probe and hasattr(env, "debug_step_probe"):
+        try:
+            probe_payload = env.debug_step_probe()
+            if isinstance(probe_payload, dict):
+                debug_probe = probe_payload
+        except Exception:
+            debug_probe = {"error": "debug_step_probe_failed"}
     trace.append({
         "step": int(step_idx),
         "actions": list(map(int, chosen)),
@@ -184,6 +193,7 @@ for step_idx in range(steps):
         "obs_head": obs.flatten()[:8].astype(float).tolist(),
         "state_head": state.flatten()[:8].astype(float).tolist(),
         "avail_actions": avail_actions,
+        "debug_probe": debug_probe,
     })
 t_close0 = time.perf_counter()
 env.close()
@@ -822,6 +832,8 @@ def _build_native_options(args: argparse.Namespace) -> dict[str, Any]:
     for key, value in overrides.items():
         if value is not None:
             payload[key] = value
+    if bool(getattr(args, 'capture_debug_probe', False)):
+        payload['capture_debug_probe'] = True
     return payload
 
 
@@ -952,6 +964,11 @@ def main() -> int:
         choices=['default', 'true', 'false'],
         default='default',
         help='Override native option reuse_step_observe_requests.',
+    )
+    parser.add_argument(
+        '--capture-debug-probe',
+        action='store_true',
+        help='Include per-step unit ordering/mask debug probe payloads in traces.',
     )
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()

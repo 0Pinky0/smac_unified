@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from operator import attrgetter
-from typing import Dict, Iterable, List, Sequence, Tuple
+from typing import Any, Dict, Iterable, List, Sequence, Tuple
 
 import numpy as np
 
@@ -125,6 +125,13 @@ class UnitTracker:
             idx: unit.raw
             for idx, unit in enumerate(team)
             if unit.raw is not None
+        }
+
+    def debug_probe(self) -> dict[str, Any]:
+        return {
+            'step_token': int(self._step_token),
+            'ally_slots': self._team_debug_slots(self._ally_units),
+            'enemy_slots': self._team_debug_slots(self._enemy_units),
         }
 
     @staticmethod
@@ -253,3 +260,16 @@ class UnitTracker:
             alive=np.asarray([u.alive for u in units], dtype=bool),
             tags=np.asarray([u.tag for u in units], dtype=np.int64),
         )
+
+    @staticmethod
+    def _team_debug_slots(units: Sequence[TrackedUnit]) -> list[dict[str, Any]]:
+        return [
+            {
+                'slot': int(idx),
+                'tag': int(unit.tag),
+                'unit_type': int(unit.unit_type),
+                'alive': bool(unit.alive),
+                'health': float(unit.health),
+            }
+            for idx, unit in enumerate(units)
+        ]

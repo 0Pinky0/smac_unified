@@ -16,6 +16,10 @@ TEST_FUNCTIONS = [
     ('tests.test_scripted_runtime', 'test_scripted_runtime_computes_actions_from_payload'),
     ('tests.test_unit_tracker', 'test_unit_tracker_keeps_stable_ids_across_updates'),
     (
+        'tests.test_unit_tracker',
+        'test_unit_tracker_debug_probe_exposes_slot_tags_and_alive_flags',
+    ),
+    (
         'tests.test_native_builders',
         'test_action_handler_avail_masks_are_deterministic',
     ),
@@ -218,6 +222,10 @@ TEST_FUNCTIONS = [
     (
         'tests.test_validation_parity',
         'test_parity_compare_records_first_mismatch_detail_values',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_native_option_builder_can_enable_capture_debug_probe',
     ),
 ]
 

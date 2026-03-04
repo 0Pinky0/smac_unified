@@ -239,6 +239,7 @@ class SMACEnv:
         self._unit_tracker = UnitTracker(self.n_agents, self.n_enemies)
         self._unit_frame: UnitFrame | None = None
         self._handler_context: HandlerContext | None = None
+        self._last_split_probe: dict[str, Any] = {}
 
     def _build_session(self) -> SC2EnvRawSession:
         cfg = SC2SessionConfig(
@@ -762,6 +763,7 @@ class SMACEnv:
 
     def _split_raw_units(self) -> tuple[list[Any], list[Any]]:
         if self._obs is None:
+            self._last_split_probe = {}
             return [], []
         raw_units = list(self._obs.observation.raw_data.units)
         allies = [u for u in raw_units if u.owner == 1]
@@ -771,30 +773,123 @@ class SMACEnv:
             enemies,
             key=attrgetter('unit_type', 'pos.x', 'pos.y'),
         )
+        probe: dict[str, Any] = {
+            'allies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in allies_sorted],
+            'enemies_sorted_tags': [int(getattr(u, 'tag', -1)) for u in enemies_sorted],
+            'ally_health_filter': [],
+            'enemy_mask_filter': [],
+            'agent_health_levels': self.agent_health_levels.astype(float).tolist(),
+            'enemy_mask': self.enemy_mask.astype(float).tolist(),
+        }
 
         if self.agent_health_levels.size > 0:
             filtered_allies = []
             for idx, unit in enumerate(allies_sorted):
+                unit_tag = int(getattr(unit, 'tag', -1))
                 if idx >= self.agent_health_levels.size:
                     filtered_allies.append(unit)
+                    probe['ally_health_filter'].append(
+                        {
+                            'index': int(idx),
+                            'tag': unit_tag,
+                            'threshold': None,
+                            'health_ratio': None,
+                            'kept': True,
+                            'reason': 'out_of_threshold_vector',
+                        }
+                    )
                     continue
                 health_max = float(getattr(unit, 'health_max', 0.0) or 0.0)
                 if health_max <= 0.0:
                     filtered_allies.append(unit)
+                    probe['ally_health_filter'].append(
+                        {
+                            'index': int(idx),
+                            'tag': unit_tag,
+                            'threshold': float(self.agent_health_levels[idx]),
+                            'health_ratio': None,
+                            'kept': True,
+                            'reason': 'invalid_health_max',
+                        }
+                    )
                     continue
                 health = float(getattr(unit, 'health', 0.0))
-                if (health / health_max) < float(self.agent_health_levels[idx]):
+                health_ratio = float(health / health_max)
+                threshold = float(self.agent_health_levels[idx])
+                keep = bool(health_ratio >= threshold)
+                if not keep:
+                    probe['ally_health_filter'].append(
+                        {
+                            'index': int(idx),
+                            'tag': unit_tag,
+                            'threshold': threshold,
+                            'health_ratio': health_ratio,
+                            'kept': False,
+                            'reason': 'below_threshold',
+                        }
+                    )
                     continue
                 filtered_allies.append(unit)
+                probe['ally_health_filter'].append(
+                    {
+                        'index': int(idx),
+                        'tag': unit_tag,
+                        'threshold': threshold,
+                        'health_ratio': health_ratio,
+                        'kept': True,
+                        'reason': 'pass',
+                    }
+                )
             allies_sorted = filtered_allies
 
         if self.enemy_mask.size > 0:
             filtered_enemies = []
             for idx, unit in enumerate(enemies_sorted):
-                if idx >= self.enemy_mask.size or float(self.enemy_mask[idx]) > 0.0:
+                unit_tag = int(getattr(unit, 'tag', -1))
+                if idx >= self.enemy_mask.size:
                     filtered_enemies.append(unit)
+                    probe['enemy_mask_filter'].append(
+                        {
+                            'index': int(idx),
+                            'tag': unit_tag,
+                            'mask': None,
+                            'kept': True,
+                            'reason': 'out_of_mask_vector',
+                        }
+                    )
+                    continue
+                mask_value = float(self.enemy_mask[idx])
+                keep = bool(mask_value > 0.0)
+                if keep:
+                    filtered_enemies.append(unit)
+                probe['enemy_mask_filter'].append(
+                    {
+                        'index': int(idx),
+                        'tag': unit_tag,
+                        'mask': mask_value,
+                        'kept': keep,
+                        'reason': 'pass' if keep else 'masked',
+                    }
+                )
             enemies_sorted = filtered_enemies
+        probe['allies_filtered_tags'] = [int(getattr(u, 'tag', -1)) for u in allies_sorted]
+        probe['enemies_filtered_tags'] = [int(getattr(u, 'tag', -1)) for u in enemies_sorted]
+        self._last_split_probe = probe
         return allies_sorted, enemies_sorted
+
+    def debug_step_probe(self) -> dict[str, Any]:
+        frame = self._unit_frame
+        return {
+            'episode_step': int(self._episode_steps),
+            'last_split_probe': dict(self._last_split_probe or {}),
+            'tracker_probe': self._unit_tracker.debug_probe(),
+            'ally_frame_tags': (
+                frame.allies.tags.astype(int).tolist() if frame is not None else []
+            ),
+            'enemy_frame_tags': (
+                frame.enemies.tags.astype(int).tolist() if frame is not None else []
+            ),
+        }
 
     def _sync_legacy_unit_views(self) -> None:
         self.agents = self._unit_tracker.raw_units_by_id(ally=True)

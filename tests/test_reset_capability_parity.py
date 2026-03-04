@@ -129,6 +129,15 @@ def test_split_raw_units_applies_health_and_enemy_masks():
     assert len(enemies) == 2
     assert all(u.tag != 1 for u in allies)
     assert all(u.tag != 102 for u in enemies)
+    probe = env._last_split_probe
+    assert probe['allies_sorted_tags'] == [1, 2, 3]
+    assert probe['allies_filtered_tags'] == [2, 3]
+    assert probe['enemies_sorted_tags'] == [101, 102, 103]
+    assert probe['enemies_filtered_tags'] == [101, 103]
+    assert probe['ally_health_filter'][0]['tag'] == 1
+    assert probe['ally_health_filter'][0]['kept'] is False
+    assert probe['enemy_mask_filter'][1]['tag'] == 102
+    assert probe['enemy_mask_filter'][1]['kept'] is False
 
 
 def test_stochastic_attack_probability_can_block_attack_command():
