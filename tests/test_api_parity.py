@@ -189,6 +189,18 @@ def test_experimental_transport_flag_propagates_to_session_config():
     env.close()
 
 
+def test_async_step_flag_propagates_to_session_config():
+    env = make_env(
+        family='smac',
+        map_name='3m',
+        normalized_api=False,
+        native_options={'enable_async_step': True},
+    )
+    cfg = env._session.config
+    assert cfg.enable_async_step is True
+    env.close()
+
+
 def test_scripted_pool_raw_mode_enables_dual_controller_by_default():
     env = make_env(
         family='smac-hard',

@@ -59,6 +59,22 @@ TEST_FUNCTIONS = [
         'test_unit_tracker_debug_probe_exposes_slot_tags_and_alive_flags',
     ),
     (
+        'tests.test_session_async',
+        'test_session_submit_collect_sync_fallback_path',
+    ),
+    (
+        'tests.test_session_async',
+        'test_session_submit_collect_async_path',
+    ),
+    (
+        'tests.test_session_async',
+        'test_session_step_keeps_ally_and_opponent_payload_layout',
+    ),
+    (
+        'tests.test_session_async',
+        'test_session_rejects_submit_when_previous_step_is_pending',
+    ),
+    (
         'tests.test_native_builders',
         'test_action_handler_avail_masks_are_deterministic',
     ),
@@ -241,6 +257,10 @@ TEST_FUNCTIONS = [
     (
         'tests.test_api_parity',
         'test_experimental_transport_flag_propagates_to_session_config',
+    ),
+    (
+        'tests.test_api_parity',
+        'test_async_step_flag_propagates_to_session_config',
     ),
     (
         'tests.test_api_parity',

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import Future, ThreadPoolExecutor
 import os
 import sys
 from dataclasses import dataclass
@@ -136,6 +137,7 @@ class SC2SessionConfig:
     enable_dual_controller: bool = False
     game_version: str | None = None
     source_root: str | None = None
+    enable_async_step: bool = False
 
 
 class SC2EnvRawSession:
@@ -145,6 +147,9 @@ class SC2EnvRawSession:
         self.config = config
         self._env = None
         self._num_agents = 1
+        self._step_executor: ThreadPoolExecutor | None = None
+        self._pending_step_future: Future | None = None
+        self._pending_step_result: list[Any] | None = None
 
     @property
     def env(self):
@@ -217,6 +222,8 @@ class SC2EnvRawSession:
                     'Scripted opponent mode launch failed to enter '
                     f'dual-controller setup: num_agents={actual_agents}.'
                 )
+        if self.config.enable_async_step and self._step_executor is None:
+            self._step_executor = ThreadPoolExecutor(max_workers=1)
 
     def reset(self):
         if self._env is None:
@@ -230,8 +237,25 @@ class SC2EnvRawSession:
         agent_actions: Sequence[Any],
         opponent_actions: Sequence[Any] | None = None,
     ):
+        self.submit_step(
+            agent_actions=agent_actions,
+            opponent_actions=opponent_actions,
+        )
+        return self.collect_step()
+
+    def submit_step(
+        self,
+        *,
+        agent_actions: Sequence[Any],
+        opponent_actions: Sequence[Any] | None = None,
+    ) -> None:
         if self._env is None:
             raise RuntimeError('SC2 session has not been launched.')
+        if self.has_pending_step:
+            raise RuntimeError(
+                'submit_step() called while a previous step is still pending. '
+                'Call collect_step() first.'
+            )
 
         if self._num_agents == 1:
             payload = [list(agent_actions)]
@@ -240,10 +264,49 @@ class SC2EnvRawSession:
                 list(agent_actions),
                 list(opponent_actions or []),
             ]
+
+        if self.config.enable_async_step and self._step_executor is not None:
+            self._pending_step_future = self._step_executor.submit(
+                self._run_step_payload,
+                payload,
+            )
+            self._pending_step_result = None
+            return
+
+        # Safe fallback path: execute synchronously and cache result for collect_step.
+        self._pending_step_result = self._run_step_payload(payload)
+        self._pending_step_future = None
+
+    def collect_step(self):
+        if self._pending_step_result is not None:
+            result = list(self._pending_step_result)
+            self._pending_step_result = None
+            return result
+        if self._pending_step_future is None:
+            raise RuntimeError('collect_step() called without a pending step.')
+        try:
+            result = list(self._pending_step_future.result())
+        finally:
+            self._pending_step_future = None
+        return result
+
+    @property
+    def has_pending_step(self) -> bool:
+        return self._pending_step_result is not None or self._pending_step_future is not None
+
+    def _run_step_payload(self, payload: Sequence[Any]):
+        assert self._env is not None
         timesteps = self._env.step(payload)
         return list(timesteps)
 
     def close(self) -> None:
+        self._pending_step_result = None
+        if self._pending_step_future is not None:
+            self._pending_step_future.cancel()
+            self._pending_step_future = None
+        if self._step_executor is not None:
+            self._step_executor.shutdown(wait=False)
+            self._step_executor = None
         if self._env is not None:
             self._env.close()
             self._env = None

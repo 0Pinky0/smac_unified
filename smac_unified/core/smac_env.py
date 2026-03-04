@@ -271,6 +271,9 @@ class SMACEnv:
                     dual_controller_default,
                 )
             ),
+            enable_async_step=bool(
+                self._native_options.get('enable_async_step', False)
+            ),
             game_version=self._env_kwargs.get('game_version'),
             source_root=self._source_root,
         )
