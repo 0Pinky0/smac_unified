@@ -54,17 +54,15 @@ class DefaultObservationHandler(ObservationHandler):
             if dist > sight_range:
                 continue
             cursor = 0
-            enemy_feats[slot, cursor] = 1.0
-            cursor += 1
             action_id = context.n_actions_no_attack + slot
             if action_id < len(avail):
                 enemy_feats[slot, cursor] = float(avail[action_id])
             cursor += 1
             enemy_feats[slot, cursor] = dist / max(sight_range, 1.0)
             cursor += 1
-            enemy_feats[slot, cursor] = (enemy.x - unit.x) / max(context.max_distance_x, 1.0)
+            enemy_feats[slot, cursor] = (enemy.x - unit.x) / max(sight_range, 1.0)
             cursor += 1
-            enemy_feats[slot, cursor] = (enemy.y - unit.y) / max(context.max_distance_y, 1.0)
+            enemy_feats[slot, cursor] = (enemy.y - unit.y) / max(sight_range, 1.0)
             cursor += 1
             if context.obs_all_health:
                 enemy_feats[slot, cursor] = enemy.health / max(enemy.health_max, 1.0)
@@ -93,11 +91,13 @@ class DefaultObservationHandler(ObservationHandler):
                     ally_feats[ally_slot, cursor] = dist / max(sight_range, 1.0)
                     cursor += 1
                     ally_feats[ally_slot, cursor] = (ally.x - unit.x) / max(
-                        context.max_distance_x, 1.0
+                        sight_range,
+                        1.0,
                     )
                     cursor += 1
                     ally_feats[ally_slot, cursor] = (ally.y - unit.y) / max(
-                        context.max_distance_y, 1.0
+                        sight_range,
+                        1.0,
                     )
                     cursor += 1
                     if context.obs_all_health:
@@ -202,7 +202,7 @@ def _feature_dims(context: HandlerContext) -> tuple[int, int, int, int]:
     if context.obs_terrain_height:
         move_dim += 9
 
-    enemy_dim = 5
+    enemy_dim = 4
     if context.obs_all_health:
         enemy_dim += 1 + context.shield_bits_enemy
     if context.unit_type_bits > 0:

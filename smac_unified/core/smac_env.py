@@ -633,8 +633,19 @@ class SMACEnv:
             map_size = game_info.start_raw.map_size
             self.map_x = float(map_size.x)
             self.map_y = float(map_size.y)
-            self.max_distance_x = self.map_x
-            self.max_distance_y = self.map_y
+            playable = getattr(game_info.start_raw, 'playable_area', None)
+            if playable is not None:
+                p0 = getattr(playable, 'p0', None)
+                p1 = getattr(playable, 'p1', None)
+                if p0 is not None and p1 is not None:
+                    self.max_distance_x = max(float(p1.x - p0.x), 1.0)
+                    self.max_distance_y = max(float(p1.y - p0.y), 1.0)
+                else:
+                    self.max_distance_x = self.map_x
+                    self.max_distance_y = self.map_y
+            else:
+                self.max_distance_x = self.map_x
+                self.max_distance_y = self.map_y
             self.pathing_grid = _decode_pathing_grid(
                 map_info=game_info.start_raw,
                 map_x=int(self.map_x),

@@ -68,6 +68,10 @@ TEST_FUNCTIONS = [
         'test_capability_handlers_append_capability_channels',
     ),
     (
+        'tests.test_obs_state_parity',
+        'test_state_handler_uses_center_relative_coordinates',
+    ),
+    (
         'tests.test_reward_outcome_parity',
         'test_step_scales_terminal_reward_after_win_bonus',
     ),

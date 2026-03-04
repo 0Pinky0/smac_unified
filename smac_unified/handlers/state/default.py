@@ -21,11 +21,23 @@ class DefaultStateHandler(StateHandler):
         enemy_attr = 3 + context.shield_bits_enemy + context.unit_type_bits
         ally_state = np.zeros((context.n_agents, ally_attr), dtype=np.float32)
         enemy_state = np.zeros((context.n_enemies, enemy_attr), dtype=np.float32)
+        center_x = context.map_x / 2.0
+        center_y = context.map_y / 2.0
 
         for unit in frame.allies.units:
-            ally_state[unit.unit_id, :] = _ally_state_row(unit=unit, context=context)
+            ally_state[unit.unit_id, :] = _ally_state_row(
+                unit=unit,
+                context=context,
+                center_x=center_x,
+                center_y=center_y,
+            )
         for unit in frame.enemies.units:
-            enemy_state[unit.unit_id, :] = _enemy_state_row(unit=unit, context=context)
+            enemy_state[unit.unit_id, :] = _enemy_state_row(
+                unit=unit,
+                context=context,
+                center_x=center_x,
+                center_y=center_y,
+            )
 
         chunks = [ally_state.flatten(), enemy_state.flatten()]
         if context.state_last_action:
@@ -59,12 +71,18 @@ class CapabilityStateHandler(DefaultStateHandler):
         return np.concatenate((base, np.asarray(extras, dtype=np.float32)), axis=0)
 
 
-def _ally_state_row(*, unit: TrackedUnit, context: HandlerContext) -> np.ndarray:
+def _ally_state_row(
+    *,
+    unit: TrackedUnit,
+    context: HandlerContext,
+    center_x: float,
+    center_y: float,
+) -> np.ndarray:
     row = np.zeros(4 + context.shield_bits_ally + context.unit_type_bits, dtype=np.float32)
     row[0] = unit.health / max(unit.health_max, 1.0)
-    row[1] = unit.weapon_cooldown / 30.0
-    row[2] = unit.x / max(context.map_x, 1.0)
-    row[3] = unit.y / max(context.map_y, 1.0)
+    row[1] = unit.weapon_cooldown / max(_unit_max_cooldown(unit=unit, context=context), 1.0)
+    row[2] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
+    row[3] = (unit.y - center_y) / max(context.max_distance_y, 1.0)
     cursor = 4
     if context.shield_bits_ally > 0:
         row[cursor] = unit.shield / max(unit.shield_max, 1.0)
@@ -76,11 +94,17 @@ def _ally_state_row(*, unit: TrackedUnit, context: HandlerContext) -> np.ndarray
     return row
 
 
-def _enemy_state_row(*, unit: TrackedUnit, context: HandlerContext) -> np.ndarray:
+def _enemy_state_row(
+    *,
+    unit: TrackedUnit,
+    context: HandlerContext,
+    center_x: float,
+    center_y: float,
+) -> np.ndarray:
     row = np.zeros(3 + context.shield_bits_enemy + context.unit_type_bits, dtype=np.float32)
     row[0] = unit.health / max(unit.health_max, 1.0)
-    row[1] = unit.x / max(context.map_x, 1.0)
-    row[2] = unit.y / max(context.map_y, 1.0)
+    row[1] = (unit.x - center_x) / max(context.max_distance_x, 1.0)
+    row[2] = (unit.y - center_y) / max(context.max_distance_y, 1.0)
     cursor = 3
     if context.shield_bits_enemy > 0:
         row[cursor] = unit.shield / max(unit.shield_max, 1.0)
@@ -148,3 +172,20 @@ def _timestep_ratio(context: HandlerContext) -> float:
     if episode_limit <= 0.0:
         return 0.0
     return float(context.episode_step) / episode_limit
+
+
+def _unit_max_cooldown(*, unit: TrackedUnit, context: HandlerContext) -> float:
+    ids = context.unit_type_ids
+    lookup = {
+        getattr(ids, 'marine_id', 0): 15.0,
+        getattr(ids, 'marauder_id', 0): 25.0,
+        getattr(ids, 'medivac_id', 0): 200.0,
+        getattr(ids, 'stalker_id', 0): 35.0,
+        getattr(ids, 'zealot_id', 0): 22.0,
+        getattr(ids, 'colossus_id', 0): 24.0,
+        getattr(ids, 'hydralisk_id', 0): 10.0,
+        getattr(ids, 'zergling_id', 0): 11.0,
+        getattr(ids, 'baneling_id', 0): 1.0,
+    }
+    value = lookup.get(unit.unit_type, 15.0)
+    return max(float(value), 1.0)

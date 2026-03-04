@@ -160,7 +160,7 @@ def test_observation_handler_restores_structured_feature_toggles():
     obs = handler.build_agent_obs(frame=frame, context=context, agent_id=0)
 
     move_dim = 4 + 8 + 9
-    enemy_dim = 5 + 1 + 3
+    enemy_dim = 4 + 1 + 3
     ally_dim = 4 + 1 + 1 + 3 + context.n_actions
     own_dim = 1 + 1 + 3
     expected = move_dim + context.attack_slots * enemy_dim + (context.n_agents - 1) * ally_dim + own_dim + 1
@@ -198,4 +198,37 @@ def test_capability_handlers_append_capability_channels():
     base_state = DefaultStateHandler().build_state(frame=frame, context=context)
     cap_state = CapabilityStateHandler().build_state(frame=frame, context=context)
     assert cap_state.shape[0] == base_state.shape[0] + 4
+
+
+def test_state_handler_uses_center_relative_coordinates():
+    env = _AvailEnv(
+        masks={
+            0: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+            1: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0],
+        }
+    )
+    context = _context(env=env)
+    context.max_distance_x = 20.0
+    context.max_distance_y = 16.0
+    frame = UnitFrame(
+        allies=_team(
+            [
+                _tracked(unit_id=0, tag=1, unit_type=2, x=18, y=12, health=40, shield=5, shield_max=5),
+                _tracked(unit_id=1, tag=2, unit_type=1, x=6, y=4, health=45),
+            ]
+        ),
+        enemies=_team([_tracked(unit_id=0, tag=101, unit_type=1, x=22, y=16, health=35)]),
+        prev_allies_health=np.asarray([40.0, 45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([5.0, 0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([35.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=4,
+    )
+    state = DefaultStateHandler().build_state(frame=frame, context=context)
+    ally_rel_x = state[2]
+    ally_rel_y = state[3]
+    center_x = context.map_x / 2.0
+    center_y = context.map_y / 2.0
+    assert np.isclose(ally_rel_x, (18.0 - center_x) / context.max_distance_x)
+    assert np.isclose(ally_rel_y, (12.0 - center_y) / context.max_distance_y)
 
