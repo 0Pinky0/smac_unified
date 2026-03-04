@@ -344,10 +344,6 @@ class SMACEnv:
         actions_int = actions_int[: self.n_agents]
         self.last_action = self._action_eye[np.asarray(actions_int, dtype=np.int64)]
         self._refresh_handler_context()
-        self._action_handler.reset(
-            frame=self._unit_frame,
-            context=self._handler_context,
-        )
 
         ally_sc_actions: List[Any] = []
         for agent_id, action in enumerate(actions_int):

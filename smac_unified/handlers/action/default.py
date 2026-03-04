@@ -41,6 +41,11 @@ class DefaultActionHandler(ActionHandler):
     def __init__(self):
         self._avail_actions_cache: dict[int, list[int]] = {}
         self._cache_step_token = -1
+        self._shoot_range_by_type: dict[int, float] = {}
+        self._enemy_targets_cache: list[TrackedUnit] = []
+        self._ally_heal_targets_cache: list[TrackedUnit] = []
+        self._enemy_abilities_step_token = -1
+        self._enemy_abilities_cache: list[Any] = []
 
     def reset(
         self,
@@ -51,6 +56,11 @@ class DefaultActionHandler(ActionHandler):
         del frame, context
         self._avail_actions_cache.clear()
         self._cache_step_token = -1
+        self._shoot_range_by_type.clear()
+        self._enemy_targets_cache = []
+        self._ally_heal_targets_cache = []
+        self._enemy_abilities_step_token = -1
+        self._enemy_abilities_cache = []
 
     def get_avail_agent_actions(
         self,
@@ -59,9 +69,7 @@ class DefaultActionHandler(ActionHandler):
         context: HandlerContext,
         agent_id: int,
     ) -> list[int]:
-        if self._cache_step_token != frame.step_token:
-            self._avail_actions_cache.clear()
-            self._cache_step_token = frame.step_token
+        self._prepare_step_caches(frame=frame, context=context)
 
         cached = self._avail_actions_cache.get(agent_id)
         if cached is not None:
@@ -106,6 +114,29 @@ class DefaultActionHandler(ActionHandler):
 
         self._avail_actions_cache[agent_id] = avail
         return avail
+
+    def _prepare_step_caches(
+        self,
+        *,
+        frame: UnitFrame,
+        context: HandlerContext,
+    ) -> None:
+        if self._cache_step_token == frame.step_token:
+            return
+        self._cache_step_token = frame.step_token
+        self._avail_actions_cache.clear()
+        self._shoot_range_by_type = context.variant_logic.shoot_range_by_type(
+            context.unit_type_ids
+        )
+        self._enemy_targets_cache = [enemy for enemy in frame.enemies.units if enemy.alive]
+        medivac_id = getattr(context.unit_type_ids, 'medivac_id', 0)
+        self._ally_heal_targets_cache = [
+            ally
+            for ally in frame.allies.units
+            if ally.alive and ally.unit_type != medivac_id
+        ]
+        self._enemy_abilities_step_token = -1
+        self._enemy_abilities_cache = []
 
     def build_agent_action(
         self,
@@ -181,11 +212,20 @@ class DefaultActionHandler(ActionHandler):
             or getattr(context.switches, 'opponent_mode', '') != 'scripted_pool'
         ):
             return []
+        env = context.env
+        if env is None:
+            return []
+        session = getattr(env, '_session', None)
+        if session is None or int(getattr(session, 'num_agents', 1)) < 2:
+            return []
 
         payload = {
             'agents': _raw_unit_dict(frame.enemies.units),
             'enemies': _raw_unit_dict(frame.allies.units),
-            'agent_ability': self._query_enemy_abilities(context.env),
+            'agent_ability': self._query_enemy_abilities_cached(
+                env=env,
+                step_token=frame.step_token,
+            ),
             'visible_matrix': self._fog_visibility_matrix(frame),
             'episode_step': context.episode_step,
         }
@@ -212,6 +252,19 @@ class DefaultActionHandler(ActionHandler):
             unit_tags=[tag],
             queue_command=False,
         )
+
+    def _query_enemy_abilities_cached(
+        self,
+        *,
+        env: Any,
+        step_token: int,
+    ) -> list[Any]:
+        if self._enemy_abilities_step_token == step_token:
+            return list(self._enemy_abilities_cache)
+        payload = self._query_enemy_abilities(env)
+        self._enemy_abilities_step_token = step_token
+        self._enemy_abilities_cache = list(payload)
+        return list(self._enemy_abilities_cache)
 
     @staticmethod
     def _query_enemy_abilities(env: Any):
@@ -289,20 +342,18 @@ class DefaultActionHandler(ActionHandler):
         frame: UnitFrame,
         context: HandlerContext,
     ) -> list[TrackedUnit]:
+        del frame
         if self._is_healer(unit, context=context):
-            medivac_id = getattr(context.unit_type_ids, 'medivac_id', 0)
-            targets = [
-                ally
-                for ally in frame.allies.units
-                if ally.alive and ally.unit_type != medivac_id
-            ]
+            targets = self._ally_heal_targets_cache
         else:
-            targets = [enemy for enemy in frame.enemies.units if enemy.alive]
+            targets = self._enemy_targets_cache
         return targets[: context.attack_slots]
 
-    @staticmethod
-    def _unit_shoot_range(*, unit_type: int, context: HandlerContext) -> float:
-        ids = context.variant_logic.shoot_range_by_type(context.unit_type_ids)
+    def _unit_shoot_range(self, *, unit_type: int, context: HandlerContext) -> float:
+        ids = self._shoot_range_by_type
+        if not ids:
+            ids = context.variant_logic.shoot_range_by_type(context.unit_type_ids)
+            self._shoot_range_by_type = ids
         default_range = 6.0
         if unit_type in ids and ids[unit_type] > 0:
             return max(float(ids[unit_type]), 0.1)
@@ -355,9 +406,7 @@ class ConicFovActionHandler(DefaultActionHandler):
         context: HandlerContext,
         agent_id: int,
     ) -> list[int]:
-        if self._cache_step_token != frame.step_token:
-            self._avail_actions_cache.clear()
-            self._cache_step_token = frame.step_token
+        self._prepare_step_caches(frame=frame, context=context)
 
         cached = self._avail_actions_cache.get(agent_id)
         if cached is not None:
@@ -485,6 +534,8 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
         super().__init__()
         self.use_ability = bool(use_ability)
         self._agent_ability_cache: dict[int, tuple[str, int, float]] = {}
+        self._abilities_step_token = -1
+        self._abilities_by_agent_cache: dict[int, tuple[int, ...]] = {}
 
     def reset(
         self,
@@ -494,6 +545,8 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
     ) -> None:
         super().reset(frame=frame, context=context)
         self._agent_ability_cache.clear()
+        self._abilities_step_token = -1
+        self._abilities_by_agent_cache = {}
 
     def get_avail_agent_actions(
         self,
@@ -502,10 +555,7 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
         context: HandlerContext,
         agent_id: int,
     ) -> list[int]:
-        if self._cache_step_token != frame.step_token:
-            self._avail_actions_cache.clear()
-            self._agent_ability_cache.clear()
-            self._cache_step_token = frame.step_token
+        self._prepare_step_caches(frame=frame, context=context)
 
         cached = self._avail_actions_cache.get(agent_id)
         if cached is not None:
@@ -548,7 +598,7 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
                     avail[action_id] = 1
 
         if self.use_ability and context.use_ability:
-            abilities_by_agent = self._query_agent_abilities(context.env)
+            abilities_by_agent = self._abilities_for_step(frame=frame, context=context)
             selected = self._select_ability_config(
                 ability_ids=abilities_by_agent.get(agent_id, ()),
             )
@@ -573,6 +623,19 @@ class AbilityAugmentedActionHandler(DefaultActionHandler):
 
         self._avail_actions_cache[agent_id] = avail
         return avail
+
+    def _abilities_for_step(
+        self,
+        *,
+        frame: UnitFrame,
+        context: HandlerContext,
+    ) -> dict[int, tuple[int, ...]]:
+        if self._abilities_step_token == frame.step_token:
+            return self._abilities_by_agent_cache
+        self._abilities_step_token = frame.step_token
+        self._agent_ability_cache.clear()
+        self._abilities_by_agent_cache = self._query_agent_abilities(context.env)
+        return self._abilities_by_agent_cache
 
     def build_agent_action(
         self,

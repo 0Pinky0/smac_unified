@@ -68,6 +68,10 @@ TEST_FUNCTIONS = [
         'test_ability_handler_falls_back_to_legacy_unit_ability',
     ),
     (
+        'tests.test_action_parity',
+        'test_ability_query_cache_reuses_same_step_and_invalidates_next_step',
+    ),
+    (
         'tests.test_obs_state_parity',
         'test_observation_handler_restores_structured_feature_toggles',
     ),

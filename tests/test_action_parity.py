@@ -62,6 +62,17 @@ class _AbilityFallbackHandler(AbilityAugmentedActionHandler):
         return {0: (23,)}
 
 
+class _CountingAbilityHandler(AbilityAugmentedActionHandler):
+    def __init__(self):
+        super().__init__(use_ability=True)
+        self.query_calls = 0
+
+    def _query_agent_abilities(self, env):
+        del env
+        self.query_calls += 1
+        return {0: (380,), 1: (380,)}
+
+
 def _tracked(
     *,
     unit_id: int,
@@ -280,4 +291,55 @@ def test_ability_handler_falls_back_to_legacy_unit_ability():
     avail = handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
     ability_action = context.n_actions_no_attack + context.ability_padding
     assert avail[ability_action] == 1
+
+
+def test_ability_query_cache_reuses_same_step_and_invalidates_next_step():
+    ally0 = _RawUnit(tag=1, x=2.0, y=2.0, health=9.0, health_max=10.0)
+    ally1 = _RawUnit(tag=2, x=3.0, y=2.0, health=9.0, health_max=10.0)
+    enemy = _RawUnit(tag=101, x=5.0, y=2.0)
+    fake_env = SimpleNamespace(
+        agents={0: ally0, 1: ally1},
+        enemies={0: enemy},
+    )
+    frame = UnitFrame(
+        allies=_team(
+            [
+                _tracked(unit_id=0, tag=1, x=2.0, y=2.0, unit_type=1),
+                _tracked(unit_id=1, tag=2, x=3.0, y=2.0, unit_type=1),
+            ]
+        ),
+        enemies=_team([_tracked(unit_id=0, tag=101, x=5.0, y=2.0)]),
+        prev_allies_health=np.asarray([45.0, 45.0], dtype=np.float32),
+        prev_allies_shield=np.asarray([0.0, 0.0], dtype=np.float32),
+        prev_enemies_health=np.asarray([45.0], dtype=np.float32),
+        prev_enemies_shield=np.asarray([0.0], dtype=np.float32),
+        step_token=5,
+    )
+    context = _context(
+        n_agents=2,
+        n_enemies=1,
+        n_actions=24,
+        n_actions_no_attack=6,
+        attack_slots=1,
+        env=fake_env,
+    )
+    context.ability_padding = 9
+    context.use_ability = True
+
+    handler = _CountingAbilityHandler()
+    handler.get_avail_agent_actions(frame=frame, context=context, agent_id=0)
+    handler.get_avail_agent_actions(frame=frame, context=context, agent_id=1)
+    assert handler.query_calls == 1
+
+    frame_next = UnitFrame(
+        allies=frame.allies,
+        enemies=frame.enemies,
+        prev_allies_health=frame.prev_allies_health,
+        prev_allies_shield=frame.prev_allies_shield,
+        prev_enemies_health=frame.prev_enemies_health,
+        prev_enemies_shield=frame.prev_enemies_shield,
+        step_token=6,
+    )
+    handler.get_avail_agent_actions(frame=frame_next, context=context, agent_id=0)
+    assert handler.query_calls == 2
 
