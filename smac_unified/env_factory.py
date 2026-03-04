@@ -173,10 +173,13 @@ def make_env(
         transport_profile=resolved_transport_profile,
         allow_experimental_transport=bool(allow_experimental_transport),
     )
+    resolved_opponent_config: dict[str, Any] = dict(opponent_config or {})
+    if 'seed' not in resolved_opponent_config and 'seed' in env_kwargs:
+        resolved_opponent_config['seed'] = env_kwargs['seed']
     runtime = opponent_runtime or _default_opponent_runtime(
         family,
         switches,
-        opponent_config,
+        resolved_opponent_config,
     )
     if not normalized_api:
         if hasattr(env, 'set_opponent_runtime'):
@@ -189,7 +192,7 @@ def make_env(
         env,
         family=family,
         opponent_runtime=runtime,
-        opponent_config=opponent_config,
+        opponent_config=resolved_opponent_config,
     )
 
 

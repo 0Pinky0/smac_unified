@@ -20,6 +20,26 @@ TEST_FUNCTIONS = [
         'tests.test_backend_registry',
         'test_make_env_hard_break_rejects_backend_mode_keyword',
     ),
+    (
+        'tests.test_legacy_compat',
+        'test_translate_legacy_kwargs_infers_smacv2_modes',
+    ),
+    (
+        'tests.test_legacy_compat',
+        'test_make_legacy_env_respects_explicit_hard_opponent_mode_override',
+    ),
+    (
+        'tests.test_legacy_compat',
+        'test_legacy_adapter_forwards_seed_assignments_to_native_env',
+    ),
+    (
+        'tests.test_legacy_compat',
+        'test_legacy_adapter_smacv2_capability_helpers_follow_shape_contract',
+    ),
+    (
+        'tests.test_legacy_compat',
+        'test_make_env_propagates_seed_to_default_scripted_runtime',
+    ),
     ('tests.test_scripted_runtime', 'test_scripted_runtime_computes_actions_from_payload'),
     (
         'tests.test_scripted_runtime',
@@ -28,6 +48,10 @@ TEST_FUNCTIONS = [
     (
         'tests.test_scripted_runtime',
         'test_scripted_runtime_keeps_generic_fallback_for_unknown_maps',
+    ),
+    (
+        'tests.test_scripted_runtime',
+        'test_scripted_runtime_reseeds_random_selection_from_episode_seed',
     ),
     ('tests.test_unit_tracker', 'test_unit_tracker_keeps_stable_ids_across_updates'),
     (

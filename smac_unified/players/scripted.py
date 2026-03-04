@@ -90,6 +90,18 @@ class ScriptedOpponentRuntime(OpponentRuntime):
     def on_reset(self, context: OpponentEpisodeContext) -> None:
         if self._family != 'smac-hard' or self._env is None:
             return
+        seed_value = self._config.seed
+        if context.seed is not None:
+            seed_value = int(context.seed)
+        if seed_value is not None:
+            self._rng.seed(int(seed_value))
+            random.seed(int(seed_value))
+            try:
+                import numpy as np
+
+                np.random.seed(int(seed_value))
+            except Exception:
+                pass
         script_pool = self._resolve_script_pool(context.map_name)
         if not script_pool:
             self._active_script = None
