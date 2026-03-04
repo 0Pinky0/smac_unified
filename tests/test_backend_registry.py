@@ -1,41 +1,34 @@
-from smac_unified.backends import BackendConfig, BackendRegistry
+from smac_unified import NormalizedEnvAdapter, SMACEnv, make_env
 
 
-class _DummyNative:
-    family = 'smac'
-    kind = 'native'
-    priority = 1
-
-    def is_available(self, config: BackendConfig):
-        return True
-
-    def make_env(self, config: BackendConfig):
-        return config
+def test_make_env_constructs_native_core_env():
+    env = make_env(
+        family='smac',
+        map_name='3m',
+        normalized_api=False,
+    )
+    assert isinstance(env, SMACEnv)
+    env.close()
 
 
-class _DummyBridge:
-    family = 'smac'
-    kind = 'bridge'
-    priority = 99
-
-    def is_available(self, config: BackendConfig):
-        return True
-
-    def make_env(self, config: BackendConfig):
-        return config
+def test_make_env_constructs_native_normalized_adapter():
+    env = make_env(
+        family='smac',
+        map_name='3m',
+        normalized_api=True,
+    )
+    assert isinstance(env, NormalizedEnvAdapter)
+    env.close()
 
 
-def test_registry_prefers_native_in_auto_mode():
-    registry = BackendRegistry()
-    registry.register(_DummyBridge())
-    registry.register(_DummyNative())
-    resolved = registry.get('smac', mode='auto', config=BackendConfig(family='smac'))
-    assert resolved.kind == 'native'
-
-
-def test_registry_can_force_bridge_mode():
-    registry = BackendRegistry()
-    registry.register(_DummyNative())
-    registry.register(_DummyBridge())
-    resolved = registry.get('smac', mode='bridge', config=BackendConfig(family='smac'))
-    assert resolved.kind == 'bridge'
+def test_make_env_hard_break_rejects_backend_mode_keyword():
+    try:
+        make_env(
+            family='smac',
+            map_name='3m',
+            normalized_api=False,
+            backend_mode='native',
+        )
+        raise AssertionError('Expected TypeError when passing backend_mode.')
+    except TypeError as exc:
+        assert 'backend_mode' in str(exc)

@@ -144,7 +144,6 @@ def test_transport_profile_b2_propagates_to_native_session_config():
         family='smac',
         map_name='3m',
         normalized_api=False,
-        backend_mode='native',
         transport_profile='B2',
     )
     cfg = env._session.config
@@ -161,7 +160,6 @@ def test_native_options_override_transport_profile_defaults():
         family='smac',
         map_name='3m',
         normalized_api=False,
-        backend_mode='native',
         transport_profile='B2',
         native_options={
             'pipeline_step_and_observe': False,
@@ -181,7 +179,6 @@ def test_experimental_transport_flag_propagates_to_session_config():
         family='smac',
         map_name='3m',
         normalized_api=False,
-        backend_mode='native',
         transport_profile='B4',
         allow_experimental_transport=True,
     )
@@ -197,7 +194,6 @@ def test_scripted_pool_raw_mode_enables_dual_controller_by_default():
         family='smac-hard',
         map_name='3m',
         normalized_api=False,
-        backend_mode='native',
     )
     cfg = env._session.config
     assert cfg.opponent_mode == 'scripted_pool'
@@ -210,7 +206,6 @@ def test_scripted_pool_raw_mode_binds_runtime_for_env_lifecycle():
         family='smac-hard',
         map_name='3m',
         normalized_api=False,
-        backend_mode='native',
     )
     assert isinstance(env._opponent_runtime, ScriptedOpponentRuntime)
     assert env._runtime_lifecycle_owner == 'env'

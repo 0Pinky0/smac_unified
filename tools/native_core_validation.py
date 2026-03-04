@@ -892,7 +892,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(
         description=(
-            'Run core-first standalone validation for native and bridge backends.'
+            'Run core-first native validation with optional tests bridge lane.'
         )
     )
     parser.add_argument(
@@ -943,6 +943,12 @@ def main() -> int:
         choices=['windowed', 'strict'],
         default='windowed',
         help='Steady parity compare mode. strict compares full trace.',
+    )
+    parser.add_argument(
+        '--bridge-lane',
+        choices=['on', 'off'],
+        default='on',
+        help='Enable tests-only bridge comparison lane.',
     )
     parser.add_argument(
         '--parity-atol',
@@ -1015,6 +1021,10 @@ def main() -> int:
     parser.add_argument('--output-json', default='tools/native_core_validation.json')
     args = parser.parse_args()
     repeats = max(int(args.repeats), 1)
+    bridge_enabled = str(args.bridge_lane).strip().lower() == 'on'
+    if bool(args.assert_parity) and not bridge_enabled:
+        print('--assert-parity requires --bridge-lane=on', file=sys.stderr)
+        return 2
     try:
         native_options = _build_native_options(args)
     except ValueError as exc:
@@ -1036,35 +1046,36 @@ def main() -> int:
         for family in args.families:
             map_name = DEFAULT_MAPS[family]
             for repeat_idx in range(repeats):
-                bridge_row = _run_case(
-                    profile=profile_name,
-                    family=family,
-                    map_name=map_name,
-                    backend_mode='bridge',
-                    repeat_idx=repeat_idx,
-                    steps=steps,
-                    warmup_steps=warmup_steps,
-                    seed=int(args.seed),
-                    forced_actions=None,
-                    normalized_api=bool(args.normalized_api),
-                    native_options=native_options,
-                    make_env_fn=make_env,
-                )
-                results.append(bridge_row)
-                bridge_status = 'PASS' if bridge_row.ok else 'FAIL'
-                print(
-                    f'[{bridge_status}] profile={profile_name} family={family} '
-                    f'repeat={repeat_idx} mode=bridge map={map_name} '
-                    f'cold_sps={bridge_row.sps:.3f} steady_sps={bridge_row.steady_sps:.3f} '
-                    f'p95_ms={bridge_row.step_latency_ms_p95:.3f} elapsed={bridge_row.elapsed_s:.3f}s '
-                    f'error={bridge_row.error}'
-                )
                 forced_actions = None
-                if bridge_row.ok and bridge_row.trace:
-                    forced_actions = [
-                        [int(a) for a in step.get('actions', [])]
-                        for step in bridge_row.trace
-                    ]
+                if bridge_enabled:
+                    bridge_row = _run_case(
+                        profile=profile_name,
+                        family=family,
+                        map_name=map_name,
+                        backend_mode='bridge',
+                        repeat_idx=repeat_idx,
+                        steps=steps,
+                        warmup_steps=warmup_steps,
+                        seed=int(args.seed),
+                        forced_actions=None,
+                        normalized_api=bool(args.normalized_api),
+                        native_options=native_options,
+                        make_env_fn=make_env,
+                    )
+                    results.append(bridge_row)
+                    bridge_status = 'PASS' if bridge_row.ok else 'FAIL'
+                    print(
+                        f'[{bridge_status}] profile={profile_name} family={family} '
+                        f'repeat={repeat_idx} mode=bridge map={map_name} '
+                        f'cold_sps={bridge_row.sps:.3f} steady_sps={bridge_row.steady_sps:.3f} '
+                        f'p95_ms={bridge_row.step_latency_ms_p95:.3f} elapsed={bridge_row.elapsed_s:.3f}s '
+                        f'error={bridge_row.error}'
+                    )
+                    if bridge_row.ok and bridge_row.trace:
+                        forced_actions = [
+                            [int(a) for a in step.get('actions', [])]
+                            for step in bridge_row.trace
+                        ]
                 native_row = _run_case(
                     profile=profile_name,
                     family=family,
@@ -1096,26 +1107,30 @@ def main() -> int:
         parity_rtol = 0.0
     summary_by_profile = _summarize_by_profile(results)
     effective_steady_parity_steps = _effective_steady_parity_steps(args)
-    parity_by_profile = _summarize_parity_by_profile(
-        results=results,
-        atol=parity_atol,
-        rtol=parity_rtol,
-        steady_parity_steps=effective_steady_parity_steps,
-    )
+    parity_by_profile: dict[str, dict[str, dict[str, Any]]] = {}
+    if bridge_enabled:
+        parity_by_profile = _summarize_parity_by_profile(
+            results=results,
+            atol=parity_atol,
+            rtol=parity_rtol,
+            steady_parity_steps=effective_steady_parity_steps,
+        )
     primary_profile = run_profiles[0][0]
     primary_parity = parity_by_profile.get(primary_profile, {})
-    for profile_name, family_payload in parity_by_profile.items():
-        for family, payload in family_payload.items():
-            status = 'PASS' if payload.get('ok', False) else 'FAIL'
-            print(
-                f"[{status}] parity profile={profile_name} family={family} "
-                f"steps={payload.get('steps_compared', 0)} "
-                f"mismatches={payload.get('mismatch_count', 0)} "
-                f"first_field={payload.get('first_mismatch_field', '')} "
-                f"first_step={payload.get('first_mismatch_step', -1)}"
-            )
+    if bridge_enabled:
+        for profile_name, family_payload in parity_by_profile.items():
+            for family, payload in family_payload.items():
+                status = 'PASS' if payload.get('ok', False) else 'FAIL'
+                print(
+                    f"[{status}] parity profile={profile_name} family={family} "
+                    f"steps={payload.get('steps_compared', 0)} "
+                    f"mismatches={payload.get('mismatch_count', 0)} "
+                    f"first_field={payload.get('first_mismatch_field', '')} "
+                    f"first_step={payload.get('first_mismatch_step', -1)}"
+                )
     output = {
         'requested_profile': args.profile,
+        'bridge_lane': 'on' if bridge_enabled else 'off',
         'seed': int(args.seed),
         'repeats': repeats,
         'normalized_api': bool(args.normalized_api),
@@ -1148,7 +1163,7 @@ def main() -> int:
 
     if not all(row.ok for row in results):
         return 1
-    if args.assert_parity:
+    if args.assert_parity and bridge_enabled:
         all_parity_ok = all(
             payload.get('ok', False)
             for profile_payload in parity_by_profile.values()

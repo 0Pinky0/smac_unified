@@ -11,9 +11,24 @@ from pathlib import Path
 TEST_FUNCTIONS = [
     ('tests.test_logic_switches', 'test_default_switches_have_expected_modes'),
     ('tests.test_logic_switches', 'test_switch_overrides_apply_cleanly'),
-    ('tests.test_backend_registry', 'test_registry_prefers_native_in_auto_mode'),
-    ('tests.test_backend_registry', 'test_registry_can_force_bridge_mode'),
+    ('tests.test_backend_registry', 'test_make_env_constructs_native_core_env'),
+    (
+        'tests.test_backend_registry',
+        'test_make_env_constructs_native_normalized_adapter',
+    ),
+    (
+        'tests.test_backend_registry',
+        'test_make_env_hard_break_rejects_backend_mode_keyword',
+    ),
     ('tests.test_scripted_runtime', 'test_scripted_runtime_computes_actions_from_payload'),
+    (
+        'tests.test_scripted_runtime',
+        'test_scripted_runtime_resolves_local_smac_hard_script_pack',
+    ),
+    (
+        'tests.test_scripted_runtime',
+        'test_scripted_runtime_keeps_generic_fallback_for_unknown_maps',
+    ),
     ('tests.test_unit_tracker', 'test_unit_tracker_keeps_stable_ids_across_updates'),
     (
         'tests.test_unit_tracker',

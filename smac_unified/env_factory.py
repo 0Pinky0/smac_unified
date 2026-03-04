@@ -44,7 +44,6 @@ class EnvFactoryConfig:
     # Preferred explicit env kwargs.
     env_kwargs: Dict[str, Any] = field(default_factory=dict)
     source_root: str | None = None
-    backend_mode: str = 'native'  # retained for explicit native-only validation
     transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None
     allow_experimental_transport: bool = False
     logic_switches: Dict[str, str] = field(default_factory=dict)
@@ -99,7 +98,6 @@ def make_env(
     normalized_api: bool = True,
     capability_config: Optional[Dict[str, Any]] = None,
     source_root: str | None = None,
-    backend_mode: str = 'native',
     transport_profile: Literal['B0', 'B1', 'B2', 'B3', 'B4'] | None = None,
     allow_experimental_transport: bool = False,
     logic_switches: Mapping[str, str] | None = None,
@@ -112,11 +110,11 @@ def make_env(
     opponent_config: Mapping[str, Any] | None = None,
     **kwargs,
 ):
-    if str(backend_mode).lower() != 'native':
-        raise ValueError(
-            "Only native backend is supported in production. "
-            "Bridge/auto backends have been removed from runtime API."
-        )
+    for removed_key in ('backend_mode', 'backend_registry', 'bridge_options'):
+        if removed_key in kwargs:
+            raise TypeError(
+                f"make_env() got an unexpected keyword argument '{removed_key}'"
+            )
     switches = default_switches(family)
     if logic_switches:
         switches = VariantSwitches(
@@ -205,7 +203,6 @@ class UnifiedFactory:
             normalized_api=config.normalized_api,
             capability_config=config.capability_config,
             source_root=config.source_root,
-            backend_mode=config.backend_mode,
             transport_profile=config.transport_profile,
             allow_experimental_transport=config.allow_experimental_transport,
             logic_switches=config.logic_switches,

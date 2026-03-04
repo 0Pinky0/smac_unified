@@ -5,7 +5,7 @@ Standalone, modular, native-first unified entry point for SMAC-family environmen
 - `smacv2`
 - `smac-hard`
 
-This package now provides a native backend built on `pysc2-compat` `SC2Env` raw mode, with explicit logic-switch presets for family-level behavior differences.
+This package provides a native-only production runtime built on `pysc2-compat` `SC2Env` raw mode, with explicit logic-switch presets for family-level behavior differences.
 
 ## Install
 
@@ -33,7 +33,6 @@ from smac_unified import make_env
 env = make_env(
     family="smac",
     map_name="3m",
-    backend_mode="native",   # native | bridge | auto
     normalized_api=True,
 )
 
@@ -43,11 +42,11 @@ batch = env.step_batch(actions)
 env.close()
 ```
 
-## Backend Modes
+## Runtime Contract
 
-- `native`: force standalone native implementation (default).
-- `bridge`: force legacy bridge backend (`smac` / `smacv2` / `smac_hard` imports).
-- `auto`: try native first, fallback to bridge.
+- Production `make_env(...)` is native-only.
+- Bridge tooling is tests-only (`tests/bridge_tools`) and used by validation scripts.
+- `backend_mode` / backend-registry inputs are hard-removed from production API.
 
 ## Logic Switches
 
@@ -57,7 +56,6 @@ Use `logic_switches` to override variant defaults:
 env = make_env(
     family="smacv2",
     map_name="8m",
-    backend_mode="native",
     logic_switches={
         "action_mode": "conic_fov",
         "reward_positive_mode": "clamp_zero",
@@ -92,7 +90,6 @@ You can also use explicit transport profiles:
 env = make_env(
     family="smac",
     map_name="3m",
-    backend_mode="native",
     transport_profile="B2",
 )
 ```
@@ -103,7 +100,6 @@ env = make_env(
 env = make_env(
     family="smac",
     map_name="3m",
-    backend_mode="native",
     transport_profile="B4",
     allow_experimental_transport=True,
 )
@@ -116,7 +112,7 @@ Pass `native_options={...}` for expert overrides. Explicit `native_options` valu
 Native runtime now follows a tracker-centered data flow:
 - `UnitTracker` emits stable `UnitFrame` snapshots each step.
 - `Action/Observation/State/Reward` handlers consume `UnitFrame + HandlerContext`.
-- `NativeStarCraft2Env` focuses on session/lifecycle/orchestration.
+- `SMACEnv` focuses on session/lifecycle/orchestration.
 
 Handler overrides use one shared factory surface:
 
@@ -132,7 +128,6 @@ from smac_unified.handlers import (
 env = make_env(
     family="smac",
     map_name="3m",
-    backend_mode="native",
     normalized_api=False,
     action_handler=DefaultActionHandler(),
     observation_handler=DefaultObservationHandler(),
@@ -151,7 +146,6 @@ Scripted runtime is integrated through the common opponent interface. Native `sm
 env = make_env(
     family="smac-hard",
     map_name="3m",
-    backend_mode="native",
 )
 ```
 
@@ -161,7 +155,6 @@ To intentionally use SC2 built-in bot opposition instead of scripted pool, switc
 env = make_env(
     family="smac-hard",
     map_name="3m",
-    backend_mode="native",
     logic_switches={"opponent_mode": "sc2_computer"},
 )
 ```
@@ -174,15 +167,16 @@ Run lightweight standalone checks in `smacnt`:
 conda run -n smacnt python tools/run_core_tests.py
 conda run -n smacnt python tools/native_core_validation.py --profile quick --steps 3 --warmup-steps 1 --assert-parity
 conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --assert-parity
+conda run -n smacnt python tools/native_core_validation.py --profile quick --steps 3 --bridge-lane off
 ```
 
 These validate:
-- backend selection policy,
+- native-only factory contract,
 - switch presets/overrides,
 - scripted runtime compatibility wrapping,
-- native vs bridge core stepping sanity on baseline maps.
+- optional native-vs-bridge core stepping sanity on baseline maps.
 
-`native_core_validation.py` runs a deterministic bridge-first action trace and replays it on native mode, then compares traces with combined `atol+rtol` tolerance checks and strict key/step alignment. The generated `tools/native_core_validation.json` report includes parity diagnostics and SPS metrics (`cold_sps` + `steady_sps`) with repeat/latency support.
+`native_core_validation.py` runs native profiling by default and can run a deterministic bridge-first replay lane (`--bridge-lane on`, default) using tests-only bridge helpers. The generated `tools/native_core_validation.json` report includes SPS metrics (`cold_sps` + `steady_sps`) and parity diagnostics when bridge lane is enabled.
 
 For `steady` profile:
 - default mode is windowed parity (`--steady-parity-steps 3`) for fast SPS iteration;
@@ -240,4 +234,4 @@ Rollout policy:
 
 ## Migration
 
-See `MIGRATION.md` for bridge-to-native migration guidance.
+See `MIGRATION.md` for native-only migration guidance.

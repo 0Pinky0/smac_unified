@@ -1,12 +1,18 @@
-# Migration: Bridge -> Native
+# Migration: Native-Only Contract
 
-This guide describes moving from legacy bridge backends to the native standalone runtime.
+This guide describes migration to the native-only standalone runtime.
 
-## 1) Pick Backend Mode Explicitly
+## 1) Remove Backend Flags
 
-- Old behavior (legacy imports): `backend_mode='bridge'`
-- New recommended behavior: `backend_mode='native'`
-- Transitional behavior: `backend_mode='auto'` (native-first, bridge fallback)
+Production `make_env(...)` no longer accepts backend-selection parameters.
+Remove any usage of:
+
+- `backend_mode`
+- `backend_registry`
+- `bridge_options`
+
+If you still need bridge comparison, use tests tooling (`tests/bridge_tools`) via
+`tools/native_core_validation.py --bridge-lane on`.
 
 ## 2) Keep API Surface Stable First
 
@@ -16,12 +22,9 @@ Start with `normalized_api=True` and keep your existing reset/step loops unchang
 env = make_env(
     family='smac',
     map_name='3m',
-    backend_mode='auto',
     normalized_api=True,
 )
 ```
-
-Then pin to `native` once your run is stable.
 
 ## 3) Port Variant Differences via Logic Switches
 
@@ -44,10 +47,11 @@ Recommended path:
 - `smac` / `smacv2`: use `opponent_mode='sc2_computer'`.
 - `smac-hard`: use `opponent_mode='scripted_pool'` with common scripted runtime.
 
-Note: native `smac-hard` defaults to safe single-controller stepping. Enable dual-controller scripted stepping only when needed:
+Native `smac-hard` defaults to scripted dual-controller stepping and fails fast if scripted prerequisites are not met.
+To use SC2 built-in bot instead, switch opponent mode explicitly:
 
 ```python
-native_options={'enable_dual_controller': True}
+logic_switches={'opponent_mode': 'sc2_computer'}
 ```
 
 ## 5) Validate Before Full Rollout
@@ -56,7 +60,8 @@ Run:
 
 ```bash
 conda run -n smacnt python tools/run_core_tests.py
-conda run -n smacnt python tools/native_core_validation.py --steps 3
+conda run -n smacnt python tools/native_core_validation.py --steps 3 --bridge-lane off
+conda run -n smacnt python tools/native_core_validation.py --steps 3 --bridge-lane on --assert-parity
 ```
 
-Use the generated `tools/native_core_validation.json` report to compare native and bridge baseline SPS.
+Use the generated `tools/native_core_validation.json` report for native SPS, and parity diagnostics when bridge lane is enabled.

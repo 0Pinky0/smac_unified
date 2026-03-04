@@ -1,3 +1,5 @@
+import sys
+
 from smac_unified.players import (
     OpponentEpisodeContext,
     OpponentStepContext,
@@ -42,3 +44,24 @@ def test_scripted_runtime_computes_actions_from_payload():
         )
     )
     assert actions == ['ok']
+
+
+def test_scripted_runtime_resolves_local_smac_hard_script_pack():
+    for name in list(sys.modules.keys()):
+        if name.startswith('smac_hard.env.scripts'):
+            sys.modules.pop(name, None)
+
+    runtime = ScriptedOpponentRuntime()
+    pool = runtime._resolve_script_pool('3m')
+
+    assert len(pool) > 0
+    assert 'smac_unified.players.smac_hard_scripts' in sys.modules
+    assert not any(
+        name.startswith('smac_hard.env.scripts') for name in sys.modules.keys()
+    )
+
+
+def test_scripted_runtime_keeps_generic_fallback_for_unknown_maps():
+    runtime = ScriptedOpponentRuntime()
+    pool = runtime._resolve_script_pool('unknown-map-name')
+    assert len(pool) > 0
