@@ -139,6 +139,18 @@ TEST_FUNCTIONS = [
         'tests.test_validation_parity',
         'test_parity_compare_uses_relative_tolerance',
     ),
+    (
+        'tests.test_validation_parity',
+        'test_summary_aggregates_repeats_with_median_fields',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_parity_summary_aggregates_repeat_results',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_native_option_builder_applies_cli_overrides',
+    ),
 ]
 
 
