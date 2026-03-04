@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Core-first standalone validation for native/bridge backends."""
+"""Core-first native validation with optional tests-only bridge lane."""
 
 from __future__ import annotations
 
@@ -85,6 +85,8 @@ if str(root) not in sys.path:
     sys.path.insert(0, str(root))
 
 from smac_unified import make_env
+from smac_unified.adapters import NormalizedEnvAdapter
+from tests.bridge_tools import make_bridge_env
 
 family = sys.argv[2]
 map_name = sys.argv[3]
@@ -120,14 +122,25 @@ def _probe_unit_slots(mapping):
     return payload
 
 t0 = time.perf_counter()
-env = make_env(
-    family=family,
-    map_name=map_name,
-    backend_mode=backend_mode,
-    normalized_api=normalized_api,
-    native_options=native_options,
-    seed=seed,
-)
+if backend_mode == "bridge":
+    bridge_env = make_bridge_env(
+        family=family,
+        map_name=map_name,
+        env_kwargs={"seed": seed},
+    )
+    env = (
+        NormalizedEnvAdapter(bridge_env, family=family)
+        if normalized_api
+        else bridge_env
+    )
+else:
+    env = make_env(
+        family=family,
+        map_name=map_name,
+        normalized_api=normalized_api,
+        native_options=native_options,
+        seed=seed,
+    )
 if normalized_api:
     env.reset(seed=seed)
 else:
