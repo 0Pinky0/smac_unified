@@ -134,6 +134,7 @@ Run lightweight standalone checks in `smacnt`:
 ```bash
 conda run -n smacnt python tools/run_core_tests.py
 conda run -n smacnt python tools/native_core_validation.py --profile quick --steps 3 --warmup-steps 1 --assert-parity
+conda run -n smacnt python tools/native_core_validation.py --profile steady --steady-steps 300 --steady-warmup-steps 30 --assert-parity
 ```
 
 These validate:
@@ -142,7 +143,33 @@ These validate:
 - scripted runtime compatibility wrapping,
 - native vs bridge core stepping sanity on baseline maps.
 
-`native_core_validation.py` now runs a deterministic bridge-first action trace and replays it on native mode, then compares traces with combined `atol+rtol` tolerance checks and strict key/step alignment. The generated `tools/native_core_validation.json` report includes both parity diagnostics and SPS metrics (`cold_sps` + `steady_sps`).
+`native_core_validation.py` now runs a deterministic bridge-first action trace and replays it on native mode, then compares traces with combined `atol+rtol` tolerance checks and strict key/step alignment. The generated `tools/native_core_validation.json` report includes parity diagnostics and SPS metrics (`cold_sps` + `steady_sps`) with repeat/latency support.
+
+For `steady` profile, parity comparison defaults to an early deterministic window (`--steady-parity-steps 3`) so long-horizon SPS runs remain performance-focused. Set `--steady-parity-steps 0` for strict full-trace parity.
+
+## SPS Rollout Decisions
+
+Transport matrix (steady profile, parity-gated):
+
+- `B0`: defaults
+- `B1`: `reuse_step_observe_requests=True`
+- `B2`: `B1 + pipeline_step_and_observe=True`
+- `B3`: `B2 + pipeline_actions_and_step=True`
+- `B4`: `B3 + ensure_available_actions=False` (experimental)
+
+Observed steady native SPS (`smac`, `smacv2`, `smac-hard`):
+
+- `B0`: `1047`, `823`, `926`
+- `B1`: `973`, `823`, `851`
+- `B2`: `1440`, `858`, `1316`  **best throughput**
+- `B3`: `821`, `730`, `894`
+- `B4`: `879`, `754`, `794`
+
+Rollout policy:
+
+- Keep conservative runtime defaults unchanged.
+- Keep `B2` as an expert opt-in via `native_options` because it has the best SPS but is a higher-performance transport profile.
+- Keep `B4` non-default experimental only (`ensure_available_actions=False`).
 
 ## Migration
 
