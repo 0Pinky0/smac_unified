@@ -13,10 +13,10 @@ This guide is for contributors extending or maintaining `smac-unified`.
 
 Main package modules:
 
-- `smac_unified/env_factory.py`
-  - `make_env`, `make_env_pool`, transport profile merge, runtime wiring
+- `smac_unified/core/env_core.py`
+  - `SMACEnvCore`, `make_env`, `make_env_pool`, transport profile merge, runtime wiring
 - `smac_unified/core/`
-  - `SMACEnv` orchestration
+  - `SMACEnvCore` orchestration
   - `SC2EnvRawSession` low-level SC2 session transport
   - `UnitTracker` stable tracked unit frames
 - `smac_unified/handlers/`
@@ -46,7 +46,7 @@ High-level per-step flow in native env:
    - normalized `StepBatch` (adapter path), or
    - raw-style tuples/dicts (non-normalized path)
 
-`SMACEnv` should stay orchestration-focused; feature logic belongs in handlers or player runtime modules.
+`SMACEnvCore` should stay orchestration-focused; feature logic belongs in handlers or player runtime modules.
 
 ## 4. Extension Points
 

@@ -55,7 +55,7 @@ pool = make_env_pool(num_envs=4, family="smac", map_name="3m")
 ## Native-First API Surface
 
 - Primary top-level imports: `make_env`, `make_env_pool`, `VariantSwitches`, `default_switches`, `merge_switches`.
-- Runtime contract helpers remain available at top-level: `SMACEnv`, `NormalizedEnvAdapter`, `VectorEnvPool`, `StepBatch`.
+- Runtime contract helpers remain available at top-level: `SMACEnvCore`, `NormalizedEnvAdapter`, `VectorEnvPool`, `StepBatch`.
 - Advanced extension points are module-scoped:
   - `smac_unified.handlers` for handler implementations and custom handler plumbing.
   - `smac_unified.players` for scripted/bot runtime internals.
@@ -84,6 +84,8 @@ Available knobs:
 - `capability_mode`: `none` | `stochastic_attack` | `stochastic_health` | `team_gen`
 - `reward_positive_mode`: `abs` | `clamp_zero`
 - `team_init_mode`: `map_default` | `episode_generated`
+
+Variant authority is enforced for core family semantics. For example, `smac-hard` keeps `action_mode=ability_augmented`, `opponent_mode=scripted_pool`, and `reward_positive_mode=clamp_zero` even if conflicting overrides are provided.
 
 ## Native Session Safety Defaults
 
@@ -127,7 +129,7 @@ Pass `native_options={...}` for expert overrides. Explicit `native_options` valu
 Native runtime now follows a tracker-centered data flow:
 - `UnitTracker` emits stable `UnitFrame` snapshots each step.
 - `Action/Observation/State/Reward` handlers consume `UnitFrame + HandlerContext`.
-- `SMACEnv` focuses on session/lifecycle/orchestration.
+- `SMACEnvCore` focuses on session/lifecycle/orchestration.
 
 Handler overrides use one shared factory surface:
 

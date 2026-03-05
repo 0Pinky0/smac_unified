@@ -30,3 +30,7 @@ class ObservationHandler(ABC):
             self.build_agent_obs(frame=frame, context=context, agent_id=agent_id)
             for agent_id in range(context.n_agents)
         ]
+
+    def obs_size(self, *, context: HandlerContext) -> int:
+        del context
+        return -1

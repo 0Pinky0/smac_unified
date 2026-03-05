@@ -1,5 +1,4 @@
-from smac_unified import make_env_pool
-from smac_unified.adapters import VectorEnvPool
+from smac_unified import VectorEnvPool, make_env_pool
 
 
 class _DummyEnv:

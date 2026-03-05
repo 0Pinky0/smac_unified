@@ -1,4 +1,4 @@
-from smac_unified import NormalizedEnvAdapter, SMACEnv, make_env
+from smac_unified import NormalizedEnvAdapter, SMACEnvCore, make_env
 
 
 def test_make_env_constructs_native_core_env():
@@ -7,7 +7,7 @@ def test_make_env_constructs_native_core_env():
         map_name='3m',
         normalized_api=False,
     )
-    assert isinstance(env, SMACEnv)
+    assert isinstance(env, SMACEnvCore)
     env.close()
 
 

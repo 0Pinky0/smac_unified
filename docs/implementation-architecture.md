@@ -6,7 +6,7 @@ This document explains how the current implementation is composed and why.
 
 Production runtime path:
 
-`make_env` -> `SMACEnv` -> `SC2EnvRawSession` -> handler/player modules
+`make_env` -> `SMACEnvCore` -> `SC2EnvRawSession` -> handler/player modules
 
 Validation-only bridge path:
 
@@ -16,7 +16,7 @@ Bridge tooling is intentionally outside production package APIs.
 
 ## 2. Core Components
 
-### 2.1 `SMACEnv`
+### 2.1 `SMACEnvCore`
 
 Responsibilities:
 
@@ -81,7 +81,7 @@ This keeps opponent logic independent from core session and handler concerns.
 - reward-positive mode
 - team-init mode
 
-`env_factory.make_env` merges defaults and overrides, then wires:
+`core.env_core.make_env` merges defaults and overrides, then wires:
 
 - handlers
 - runtime

@@ -7,6 +7,22 @@ from .base import StateHandler
 
 
 class DefaultStateHandler(StateHandler):
+    def state_size(self, *, context: HandlerContext) -> int:
+        if context.obs_instead_of_state and context.env is not None:
+            get_obs_size = getattr(context.env, 'get_obs_size', None)
+            if callable(get_obs_size):
+                return int(context.n_agents * int(get_obs_size()))
+            return -1
+        ally_attr = 4 + context.shield_bits_ally + context.unit_type_bits
+        enemy_attr = 3 + context.shield_bits_enemy + context.unit_type_bits
+        ally_size = context.n_agents * ally_attr
+        enemy_size = context.n_enemies * enemy_attr
+        last_action_size = (
+            context.n_agents * context.n_actions if context.state_last_action else 0
+        )
+        timestep_size = 1 if context.state_timestep_number else 0
+        return int(ally_size + enemy_size + last_action_size + timestep_size)
+
     def build_state(
         self,
         *,
@@ -71,6 +87,19 @@ class DefaultStateHandler(StateHandler):
 
 class CapabilityStateHandler(DefaultStateHandler):
     """SMACv2 capability-aware global-state semantics."""
+
+    def state_size(self, *, context: HandlerContext) -> int:
+        total = super().state_size(context=context)
+        env = context.env
+        extras = 0
+        if env is not None:
+            attack_probs = getattr(env, 'agent_attack_probabilities', None)
+            if attack_probs is not None:
+                extras += int(np.asarray(attack_probs).size)
+            health_levels = getattr(env, 'agent_health_levels', None)
+            if health_levels is not None:
+                extras += int(np.asarray(health_levels).size)
+        return int(total + extras)
 
     def build_state(
         self,

@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import numpy as np
 
-from smac_unified.core import SMACEnv
+from smac_unified.core import SMACEnvCore
 from smac_unified.handlers import DefaultActionHandler, HandlerContext, TrackedUnit, UnitFrame, UnitTeamFrame
 
 
@@ -75,7 +75,7 @@ def _team(units):
 
 
 def test_reset_capabilities_apply_episode_vectors_and_payload():
-    env = SMACEnv(
+    env = SMACEnvCore(
         variant='smacv2',
         map_name='8m',
         capability_config={
@@ -111,7 +111,7 @@ def test_reset_capabilities_apply_episode_vectors_and_payload():
 
 
 def test_split_raw_units_applies_health_and_enemy_masks():
-    env = SMACEnv(variant='smacv2', map_name='3m')
+    env = SMACEnvCore(variant='smacv2', map_name='3m')
     env.agent_health_levels = np.asarray([0.8, 0.0, 0.0], dtype=np.float32)
     env.enemy_mask = np.asarray([1.0, 0.0, 1.0], dtype=np.float32)
     units = [
@@ -194,7 +194,7 @@ def test_stochastic_attack_probability_can_block_attack_command():
 
 
 def test_split_raw_units_preserves_enemy_observed_order_for_slot_mapping():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     env.enemy_mask = np.asarray([1.0, 1.0, 1.0], dtype=np.float32)
     units = [
         _RawUnit(owner=1, unit_type=1, x=1, y=1, health=45, health_max=45, tag=1),
@@ -213,7 +213,7 @@ def test_split_raw_units_preserves_enemy_observed_order_for_slot_mapping():
 
 
 def test_split_raw_units_prefers_opponent_observation_for_enemy_team():
-    env = SMACEnv(variant='smac-hard', map_name='3m')
+    env = SMACEnvCore(variant='smac-hard', map_name='3m')
     env.enemy_mask = np.asarray([1.0, 1.0, 1.0], dtype=np.float32)
     ally_obs_units = [
         _RawUnit(owner=1, unit_type=1, x=1, y=1, health=45, health_max=45, tag=1),

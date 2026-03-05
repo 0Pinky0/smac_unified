@@ -4,15 +4,15 @@ from types import MethodType
 
 import numpy as np
 
-from smac_unified import make_env
-from smac_unified.core import SMACEnv
+from smac_unified import make_env, merge_switches
+from smac_unified.core import SMACEnvCore
 from smac_unified.core.sc2session import SC2SessionConfig, _build_map_spec
 from smac_unified.maps import get_map_params
 from smac_unified.players import ScriptedOpponentRuntime
 
 
 def test_env_api_exposes_legacy_stats_and_metadata_fields():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     env.battles_won = 3
     env.battles_game = 5
     env.timeouts = 1
@@ -32,13 +32,38 @@ def test_env_api_exposes_legacy_stats_and_metadata_fields():
 
 
 def test_smacv2_env_info_includes_cap_shape_field():
-    env = SMACEnv(variant='smacv2', map_name='8m')
+    env = SMACEnvCore(variant='smacv2', map_name='8m')
     env_info = env.get_env_info()
     assert env_info['cap_shape'] == 0
 
 
+def test_env_info_reports_stable_space_shapes_before_reset():
+    env = SMACEnvCore(variant='smac', map_name='3m')
+    env_info = env.get_env_info()
+    assert int(env_info['obs_shape']) > 0
+    assert int(env_info['state_shape']) > 0
+    assert env.get_obs_size() == int(env_info['obs_shape'])
+    assert env.get_state().shape[0] == int(env_info['state_shape'])
+
+
+def test_capability_handler_size_contracts_increase_shapes():
+    base = SMACEnvCore(variant='smacv2', map_name='8m')
+    cap = SMACEnvCore(
+        variant='smacv2',
+        map_name='8m',
+        env_kwargs={
+            'logic_switches': merge_switches(
+                'smacv2',
+                {'capability_mode': 'team_gen'},
+            )
+        },
+    )
+    assert cap.get_obs_size() > base.get_obs_size()
+    assert cap.get_state_size() > base.get_state_size()
+
+
 def test_step_batch_matches_legacy_payload_contract():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
 
     def _step_stub(self, actions):
         del actions
@@ -68,7 +93,7 @@ def test_step_batch_matches_legacy_payload_contract():
 
 
 def test_reset_batch_matches_legacy_payload_contract():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
 
     def _reset_stub(self, episode_config=None, **kwargs):
         del episode_config, kwargs
@@ -90,7 +115,7 @@ def test_reset_batch_matches_legacy_payload_contract():
 
 
 def test_seed_supports_getter_setter_and_rng_reseed():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     assert env.seed() is None
     assert env.seed(123) == 123
     first = env._rng.uniform(size=4)
@@ -102,7 +127,7 @@ def test_seed_supports_getter_setter_and_rng_reseed():
 
 
 def test_last_action_update_is_in_place_one_hot():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     before = env.last_action
     action_ids = [1] * env.n_agents
     env._update_last_action_matrix(action_ids)
@@ -112,7 +137,7 @@ def test_last_action_update_is_in_place_one_hot():
 
 
 def test_last_action_contract_tracks_requested_ids_per_agent():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     requested = [idx % env.n_actions for idx in range(env.n_agents)]
     env._update_last_action_matrix(requested)
     for agent_id, action_id in enumerate(requested):
@@ -122,7 +147,7 @@ def test_last_action_contract_tracks_requested_ids_per_agent():
 
 
 def test_handler_context_refresh_reuses_instance():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     env._episode_steps = 2
     env._refresh_handler_context()
     ctx = env._handler_context
@@ -140,7 +165,7 @@ def test_handler_context_refresh_reuses_instance():
 
 
 def test_step_pipeline_invokes_encode_submit_collect_decode_in_order():
-    env = SMACEnv(variant='smac', map_name='3m')
+    env = SMACEnvCore(variant='smac', map_name='3m')
     call_order = []
 
     def _normalize_stub(self, actions):
@@ -286,7 +311,7 @@ def test_scripted_pool_map_spec_prefers_new_maps_for_overlap_maps():
 
 
 def test_forced_opponent_action_schedule_overrides_runtime_branch():
-    env = SMACEnv(variant='smac-hard', map_name='3m')
+    env = SMACEnvCore(variant='smac-hard', map_name='3m')
 
     class _ActionStub:
         def build_agent_action(

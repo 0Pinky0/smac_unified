@@ -1,7 +1,17 @@
 """Native-first public entry points for SMAC-family environments."""
 
-from .adapters import NormalizedEnvAdapter, VectorEnvPool
-from .config import (
+from .core import (
+    EnvFactoryConfig,
+    NormalizedEnvAdapter,
+    SC2EnvRawSession,
+    SC2SessionConfig,
+    SMACEnvCore,
+    UnifiedFactory,
+    VectorEnvPool,
+    make_env,
+    make_env_pool,
+)
+from .core.switches import (
     ActionMode,
     CapabilityMode,
     OpponentMode,
@@ -9,20 +19,8 @@ from .config import (
     TeamInitMode,
     VariantName,
     VariantSwitches,
-    default_switches,
-    merge_switches,
 )
-from .env_factory import (
-    EnvFactoryConfig,
-    UnifiedFactory,
-    make_env,
-    make_env_pool,
-)
-from .core import (
-    SMACEnv,
-    SC2EnvRawSession,
-    SC2SessionConfig,
-)
+from .core.variants import default_switches, merge_switches
 from .types import StepBatch
 
 __all__ = [
@@ -34,7 +32,7 @@ __all__ = [
     'RewardPositiveMode',
     'SC2EnvRawSession',
     'SC2SessionConfig',
-    'SMACEnv',
+    'SMACEnvCore',
     'StepBatch',
     'TeamInitMode',
     'UnifiedFactory',

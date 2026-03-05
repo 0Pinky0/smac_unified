@@ -7,6 +7,17 @@ from .base import ObservationHandler
 
 
 class DefaultObservationHandler(ObservationHandler):
+    def obs_size(self, *, context: HandlerContext) -> int:
+        move_dim, enemy_dim, ally_dim, own_dim = _feature_dims(context)
+        total = (
+            move_dim
+            + context.attack_slots * enemy_dim
+            + max(context.n_agents - 1, 1) * ally_dim
+            + own_dim
+            + (1 if context.obs_timestep_number else 0)
+        )
+        return int(total)
+
     def build_agent_obs(
         self,
         *,
@@ -166,6 +177,19 @@ class DefaultObservationHandler(ObservationHandler):
 
 class CapabilityObservationHandler(DefaultObservationHandler):
     """SMACv2 capability-aware observation semantics."""
+
+    def obs_size(self, *, context: HandlerContext) -> int:
+        total = super().obs_size(context=context)
+        extras = 0
+        if context.n_fov_actions > 0 and context.fov_directions is not None:
+            extras += 2
+        env = context.env
+        if env is not None:
+            if getattr(env, 'agent_attack_probabilities', None) is not None:
+                extras += 1
+            if getattr(env, 'agent_health_levels', None) is not None:
+                extras += 1
+        return int(total + extras)
 
     def build_agent_obs(
         self,

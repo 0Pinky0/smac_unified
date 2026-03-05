@@ -18,3 +18,7 @@ class StateHandler(ABC):
         context: HandlerContext,
     ) -> np.ndarray:
         raise NotImplementedError
+
+    def state_size(self, *, context: HandlerContext) -> int:
+        del context
+        return -1

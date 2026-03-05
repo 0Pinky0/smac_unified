@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Mapping
 
-from ..config import VariantSwitches
+from ..core.switches import VariantSwitches
 from ..maps import MapParams
 from .action import (
     AbilityAugmentedActionHandler,

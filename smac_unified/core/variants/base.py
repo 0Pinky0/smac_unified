@@ -3,8 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Dict
 
-from ...config import VariantSwitches
 from ...maps import MapParams
+from ..switches import VariantSwitches
 
 
 @dataclass

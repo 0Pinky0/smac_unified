@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 from ..types import HandlerContext, UnitFrame
 
@@ -16,6 +16,19 @@ class ActionHandler(ABC):
         context: HandlerContext,
     ) -> None:
         del frame, context
+
+    def resolve_action_space(
+        self,
+        *,
+        n_agents: int,
+        n_enemies: int,
+        env_kwargs: Mapping[str, Any],
+    ) -> tuple[int, int, int]:
+        del env_kwargs
+        attack_slots = max(int(n_agents), int(n_enemies))
+        n_actions_no_attack = 6
+        n_actions = n_actions_no_attack + attack_slots
+        return n_actions_no_attack, n_actions, attack_slots
 
     @abstractmethod
     def get_avail_agent_actions(

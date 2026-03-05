@@ -538,8 +538,7 @@ root = Path(sys.argv[1]).resolve()
 if str(root) not in sys.path:
     sys.path.insert(0, str(root))
 
-from smac_unified import make_env
-from smac_unified.adapters import NormalizedEnvAdapter
+from smac_unified import NormalizedEnvAdapter, make_env
 from tools.bridge_tools import make_bridge_env
 
 family = sys.argv[2]

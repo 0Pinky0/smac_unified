@@ -54,31 +54,31 @@ CORE_PARITY_MATRIX: tuple[ParityEntry, ...] = (
     ParityEntry(
         block='reward_termination',
         legacy_symbol='smac.env.starcraft2.StarCraft2Env.step',
-        unified_symbol='smac_unified.core.smac_env.SMACEnv.step',
+        unified_symbol='smac_unified.core.env_core.SMACEnvCore.step',
         rationale='Terminal reward bonuses, timeout rules, and info payload.',
     ),
     ParityEntry(
         block='reset_init',
         legacy_symbol='smac.env.starcraft2.StarCraft2Env.reset',
-        unified_symbol='smac_unified.core.smac_env.SMACEnv.reset',
+        unified_symbol='smac_unified.core.env_core.SMACEnvCore.reset',
         rationale='Episode lifecycle and unit/counter initialization.',
     ),
     ParityEntry(
         block='reset_init',
         legacy_symbol='smac.env.starcraft2.StarCraft2Env.init_units',
-        unified_symbol='smac_unified.core.smac_env.SMACEnv._split_raw_units',
+        unified_symbol='smac_unified.core.env_core.SMACEnvCore._split_raw_units',
         rationale='Stable ally/enemy slot assignment by unit ordering.',
     ),
     ParityEntry(
         block='api_contract',
         legacy_symbol='smac.env.multiagentenv.MultiAgentEnv.get_env_info',
-        unified_symbol='smac_unified.core.smac_env.SMACEnv.get_env_info',
+        unified_symbol='smac_unified.core.env_core.SMACEnvCore.get_env_info',
         rationale='Runtime metadata contract used by training stacks.',
     ),
     ParityEntry(
         block='api_contract',
         legacy_symbol='smac.env.multiagentenv.MultiAgentEnv.step/reset',
-        unified_symbol='smac_unified.adapters.NormalizedEnvAdapter.step/reset',
+        unified_symbol='smac_unified.core.env_core.NormalizedEnvAdapter.step/reset',
         rationale='Normalized batch contract over native and bridge backends.',
     ),
 )

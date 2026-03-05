@@ -4,7 +4,7 @@ from types import MethodType, SimpleNamespace
 
 import numpy as np
 
-from smac_unified.core import SMACEnv
+from smac_unified.core import SMACEnvCore
 from smac_unified.handlers import TrackedUnit, UnitFrame, UnitTeamFrame
 
 
@@ -108,8 +108,8 @@ def _build_env(
     episode_limit: int,
     battle_code: int | None,
     timestep_last: bool,
-) -> SMACEnv:
-    env = SMACEnv(
+) -> SMACEnvCore:
+    env = SMACEnvCore(
         variant='smac',
         map_name='3m',
         env_kwargs={
