@@ -21,6 +21,10 @@ TEST_FUNCTIONS = [
         'test_make_env_hard_break_rejects_backend_mode_keyword',
     ),
     (
+        'tests.test_bridge_tools',
+        'test_bridge_tools_installs_compat_shim_for_legacy_wrappers',
+    ),
+    (
         'tests.test_dependency_contract',
         'test_pyproject_base_dependencies_include_native_runtime_requirements',
     ),

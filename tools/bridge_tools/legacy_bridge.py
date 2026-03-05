@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib
 import os
 import sys
+import types
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -45,12 +46,40 @@ def _bootstrap_source_paths(source_root: Path | None) -> None:
             _prepend_path(path)
 
 
+def _install_compat_shim() -> None:
+    module_name = 'smac_unified.compat'
+    existing = sys.modules.get(module_name)
+    if existing is not None and hasattr(existing, 'make_legacy_env'):
+        return
+    from .legacy_compat_shim import (
+        LegacyEnvAdapter,
+        make_legacy_env,
+        translate_legacy_kwargs,
+    )
+
+    compat_module = types.ModuleType(module_name)
+    compat_module.LegacyEnvAdapter = LegacyEnvAdapter
+    compat_module.make_legacy_env = make_legacy_env
+    compat_module.translate_legacy_kwargs = translate_legacy_kwargs
+    compat_module.__all__ = [
+        'LegacyEnvAdapter',
+        'make_legacy_env',
+        'translate_legacy_kwargs',
+    ]
+    sys.modules[module_name] = compat_module
+
+    parent = sys.modules.get('smac_unified')
+    if parent is not None:
+        setattr(parent, 'compat', compat_module)
+
+
 def _import_symbol(
     module_name: str,
     symbol_name: str,
     *,
     source_root: str | None,
 ) -> Any:
+    _install_compat_shim()
     try:
         module = importlib.import_module(module_name)
         return getattr(module, symbol_name)
