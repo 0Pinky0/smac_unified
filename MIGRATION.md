@@ -2,6 +2,10 @@
 
 This guide describes migration to the native-only standalone runtime.
 
+Release metadata:
+- License: `LICENSE`
+- Release notes: `CHANGELOG.md`
+
 ## 1) Remove Backend Flags
 
 Production `make_env(...)` no longer accepts backend-selection parameters.

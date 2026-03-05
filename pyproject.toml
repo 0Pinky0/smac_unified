@@ -7,6 +7,7 @@ name = 'smac-unified'
 version = '0.1.0'
 description = 'Standalone modular unified API for SMAC-family environments.'
 readme = 'README.md'
+license = { file = 'LICENSE' }
 requires-python = '>=3.9'
 dependencies = [
   'numpy>=1.21',

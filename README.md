@@ -13,17 +13,18 @@ This package provides a native-only production runtime built on `pysc2-compat` `
 pip install -e .
 ```
 
-Optional runtime dependencies for native backend:
-
-```bash
-pip install -e ".[native-backend]"
-```
+Native runtime dependencies are included in the base package install.
 
 If your `pysc2-compat` source is not installed as a package, you can point to the monorepo root:
 
 ```bash
 export SMAC_UNIFIED_SOURCE_ROOT=/path/to/SoManySMACs
 ```
+
+## Release Metadata
+
+- License: `LICENSE`
+- Release notes: `CHANGELOG.md`
 
 ## Quick Start
 
