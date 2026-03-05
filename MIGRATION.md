@@ -11,7 +11,7 @@ Remove any usage of:
 - `backend_registry`
 - `bridge_options`
 
-If you still need bridge comparison, use tests tooling (`tests/bridge_tools`) via
+If you still need bridge comparison, use bridge tooling (`tools/bridge_tools`) via
 `tools/native_core_validation.py --bridge-lane on`.
 
 ## 2) Keep API Surface Stable First

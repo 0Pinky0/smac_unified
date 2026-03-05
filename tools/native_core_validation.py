@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Core-first native validation with optional tests-only bridge lane."""
+"""Core-first native validation with optional bridge utility lane."""
 
 from __future__ import annotations
 
@@ -538,7 +538,7 @@ if str(root) not in sys.path:
 
 from smac_unified import make_env
 from smac_unified.adapters import NormalizedEnvAdapter
-from tests.bridge_tools import make_bridge_env
+from tools.bridge_tools import make_bridge_env
 
 family = sys.argv[2]
 map_name = sys.argv[3]
@@ -1515,7 +1515,7 @@ def main() -> int:
 
     parser = argparse.ArgumentParser(
         description=(
-            'Run core-first native validation with optional tests bridge lane.'
+            'Run core-first native validation with optional bridge utility lane.'
         )
     )
     parser.add_argument(
@@ -1598,7 +1598,7 @@ def main() -> int:
         '--bridge-lane',
         choices=['on', 'off'],
         default='on',
-        help='Enable tests-only bridge comparison lane.',
+        help='Enable bridge utility comparison lane.',
     )
     parser.add_argument(
         '--parity-atol',

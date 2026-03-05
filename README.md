@@ -45,7 +45,7 @@ env.close()
 ## Runtime Contract
 
 - Production `make_env(...)` is native-only.
-- Bridge tooling is tests-only (`tests/bridge_tools`) and used by validation scripts.
+- Bridge tooling is validation-only (`tools/bridge_tools`) and used by validation scripts.
 - `backend_mode` / backend-registry inputs are hard-removed from production API.
 
 ## Logic Switches
@@ -176,7 +176,7 @@ These validate:
 - scripted runtime compatibility wrapping,
 - optional native-vs-bridge core stepping sanity on baseline maps.
 
-`native_core_validation.py` runs native profiling by default and can run a deterministic bridge-first replay lane (`--bridge-lane on`, default) using tests-only bridge helpers. The generated `tools/native_core_validation.json` report includes SPS metrics (`cold_sps` + `steady_sps`) and parity diagnostics when bridge lane is enabled.
+`native_core_validation.py` runs native profiling by default and can run a deterministic bridge-first replay lane (`--bridge-lane on`, default) using `tools/bridge_tools` helpers. The generated `tools/native_core_validation.json` report includes SPS metrics (`cold_sps` + `steady_sps`) and parity diagnostics when bridge lane is enabled.
 
 For `steady` profile:
 - default mode is windowed parity (`--steady-parity-steps 3`) for fast SPS iteration;
