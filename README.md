@@ -25,6 +25,7 @@ export SMAC_UNIFIED_SOURCE_ROOT=/path/to/SoManySMACs
 
 - License: `LICENSE`
 - Release notes: `CHANGELOG.md`
+- Full docs: `docs/README.md`
 
 ## Quick Start
 
