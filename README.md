@@ -43,11 +43,24 @@ batch = env.step_batch(actions)
 env.close()
 ```
 
-## Runtime Contract
+Parallel sampling entry point:
 
-- Production `make_env(...)` is native-only.
-- Bridge tooling is validation-only (`tools/bridge_tools`) and used by validation scripts.
-- `backend_mode` / backend-registry inputs are hard-removed from production API.
+```python
+from smac_unified import make_env_pool
+
+pool = make_env_pool(num_envs=4, family="smac", map_name="3m")
+```
+
+## Native-First API Surface
+
+- Primary top-level imports: `make_env`, `make_env_pool`, `VariantSwitches`, `default_switches`, `merge_switches`.
+- Runtime contract helpers remain available at top-level: `SMACEnv`, `NormalizedEnvAdapter`, `VectorEnvPool`, `StepBatch`.
+- Advanced extension points are module-scoped:
+  - `smac_unified.handlers` for handler implementations and custom handler plumbing.
+  - `smac_unified.players` for scripted/bot runtime internals.
+  - `smac_unified.core` for low-level session/runtime internals.
+- Production `make_env(...)` is native-only; `backend_mode` / backend-registry inputs are hard-removed.
+- Bridge comparison is validation-only through `tools/native_core_validation.py` + `tools/bridge_tools`.
 
 ## Logic Switches
 
