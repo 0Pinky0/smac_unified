@@ -10,11 +10,9 @@ readme = 'README.md'
 requires-python = '>=3.9'
 dependencies = [
   'numpy>=1.21',
+  'pysc2',
+  's2clientprotocol',
 ]
-
-[project.optional-dependencies]
-native-backend = ['pysc2', 's2clientprotocol']
-legacy-backends = []
 
 [tool.setuptools.packages.find]
 include = ['smac_unified*']

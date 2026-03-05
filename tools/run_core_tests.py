@@ -20,6 +20,14 @@ TEST_FUNCTIONS = [
         'tests.test_backend_registry',
         'test_make_env_hard_break_rejects_backend_mode_keyword',
     ),
+    (
+        'tests.test_dependency_contract',
+        'test_pyproject_base_dependencies_include_native_runtime_requirements',
+    ),
+    (
+        'tests.test_dependency_contract',
+        'test_pyproject_does_not_hide_native_runtime_in_optional_extra',
+    ),
     ('tests.test_scripted_runtime', 'test_scripted_runtime_computes_actions_from_payload'),
     (
         'tests.test_scripted_runtime',
