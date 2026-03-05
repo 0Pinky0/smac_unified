@@ -352,6 +352,14 @@ TEST_FUNCTIONS = [
     ),
     (
         'tests.test_validation_parity',
+        'test_build_report_payload_includes_schema_version_and_contract_keys',
+    ),
+    (
+        'tests.test_validation_parity',
+        'test_build_report_payload_primary_profile_aliases_follow_quick_profile',
+    ),
+    (
+        'tests.test_validation_parity',
         'test_parity_compare_reports_trace_length_and_missing_keys',
     ),
     (

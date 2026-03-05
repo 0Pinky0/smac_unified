@@ -2,7 +2,9 @@ from types import SimpleNamespace
 
 from tools.native_core_validation import (
     CaseResult,
+    REPORT_SCHEMA_VERSION,
     _aggregate_parity_by_family,
+    _build_report_payload,
     _build_native_options,
     _build_matrix_cases,
     _compare_case_pair,
@@ -535,6 +537,106 @@ def test_effective_steady_parity_steps_strict_forces_full_trace():
     assert _effective_steady_parity_steps(args) == 0
     args.steady_parity_mode = 'windowed'
     assert _effective_steady_parity_steps(args) == 9
+
+
+def test_build_report_payload_includes_schema_version_and_contract_keys():
+    args = SimpleNamespace(
+        profile='quick',
+        bridge_lane='on',
+        seed=11,
+        repeats=2,
+        normalized_api=False,
+        pool_mode='sync',
+        subprocess_timeout_s=240.0,
+        matrix_preset='critical-core',
+        family_maps_json='{}',
+        logic_lane_preset='none',
+        logic_lanes_json='[]',
+        bridge_overridden_lanes=False,
+        force_opponent_actions_from_bridge=False,
+        steady_parity_mode='windowed',
+        steady_parity_steps=3,
+    )
+    payload = _build_report_payload(
+        args=args,
+        bridge_enabled=True,
+        repeat_seed_stride=1,
+        parallel_envs=1,
+        matrix_cases=[],
+        native_options={'ensure_available_actions': True},
+        run_profiles=[('quick', 3, 1)],
+        results=[_case('native', [_trace_step(step=0)], profile='quick')],
+        summary_by_profile={'quick': {'smac': {'native_sps': 1.0}}},
+        parity_by_profile={'quick': {'smac:3m:default': {'ok': True}}},
+        parity_by_family_profile={'quick': {'smac': {'ok': True}}},
+        parity_atol=1e-4,
+        parity_rtol=1e-5,
+        effective_steady_parity_steps=3,
+    )
+    assert payload['report_schema_version'] == REPORT_SCHEMA_VERSION
+    for key in (
+        'requested_profile',
+        'results',
+        'summary',
+        'summary_by_profile',
+        'parity',
+        'parity_cases',
+        'parity_by_profile',
+        'parity_by_family_profile',
+        'parity_tolerance',
+    ):
+        assert key in payload
+
+
+def test_build_report_payload_primary_profile_aliases_follow_quick_profile():
+    args = SimpleNamespace(
+        profile='both',
+        bridge_lane='on',
+        seed=7,
+        repeats=1,
+        normalized_api=False,
+        pool_mode='sync',
+        subprocess_timeout_s=240.0,
+        matrix_preset='none',
+        family_maps_json='{}',
+        logic_lane_preset='none',
+        logic_lanes_json='[]',
+        bridge_overridden_lanes=False,
+        force_opponent_actions_from_bridge=False,
+        steady_parity_mode='strict',
+        steady_parity_steps=0,
+    )
+    summary_by_profile = {
+        'quick': {'smac': {'native_sps': 10.0}},
+        'steady': {'smac': {'native_sps': 20.0}},
+    }
+    parity_by_profile = {
+        'quick': {'smac:3m:default': {'ok': True}},
+        'steady': {'smac:3m:default': {'ok': False}},
+    }
+    parity_by_family_profile = {
+        'quick': {'smac': {'ok': True}},
+        'steady': {'smac': {'ok': False}},
+    }
+    payload = _build_report_payload(
+        args=args,
+        bridge_enabled=True,
+        repeat_seed_stride=1,
+        parallel_envs=1,
+        matrix_cases=[],
+        native_options={},
+        run_profiles=[('quick', 3, 1), ('steady', 120, 20)],
+        results=[],
+        summary_by_profile=summary_by_profile,
+        parity_by_profile=parity_by_profile,
+        parity_by_family_profile=parity_by_family_profile,
+        parity_atol=1e-4,
+        parity_rtol=1e-5,
+        effective_steady_parity_steps=0,
+    )
+    assert payload['summary'] == summary_by_profile['quick']
+    assert payload['parity'] == parity_by_family_profile['quick']
+    assert payload['parity_cases'] == parity_by_profile['quick']
 
 
 def test_parity_compare_reports_trace_length_and_missing_keys():

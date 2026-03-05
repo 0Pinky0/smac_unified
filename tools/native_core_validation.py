@@ -52,6 +52,8 @@ LOGIC_LANE_PRESETS: dict[str, list[dict[str, Any]]] = {
     ],
 }
 
+REPORT_SCHEMA_VERSION = 1
+
 
 @dataclass(frozen=True)
 class MatrixCase:
@@ -1509,6 +1511,72 @@ def _effective_steady_parity_steps(args: argparse.Namespace) -> int:
     return max(int(getattr(args, 'steady_parity_steps', 0)), 0)
 
 
+def _build_report_payload(
+    *,
+    args: argparse.Namespace,
+    bridge_enabled: bool,
+    repeat_seed_stride: int,
+    parallel_envs: int,
+    matrix_cases: list[MatrixCase],
+    native_options: dict[str, Any],
+    run_profiles: list[tuple[str, int, int]],
+    results: list[CaseResult],
+    summary_by_profile: dict[str, dict[str, dict[str, float]]],
+    parity_by_profile: dict[str, dict[str, dict[str, Any]]],
+    parity_by_family_profile: dict[str, dict[str, dict[str, Any]]],
+    parity_atol: float,
+    parity_rtol: float,
+    effective_steady_parity_steps: int,
+) -> dict[str, Any]:
+    primary_profile = run_profiles[0][0]
+    primary_parity = parity_by_family_profile.get(primary_profile, {})
+    primary_parity_cases = parity_by_profile.get(primary_profile, {})
+    return {
+        'report_schema_version': int(REPORT_SCHEMA_VERSION),
+        'requested_profile': args.profile,
+        'bridge_lane': 'on' if bridge_enabled else 'off',
+        'seed': int(args.seed),
+        'repeat_seed_stride': int(repeat_seed_stride),
+        'repeats': max(int(args.repeats), 1),
+        'normalized_api': bool(args.normalized_api),
+        'parallel_envs': int(parallel_envs),
+        'pool_mode': str(args.pool_mode),
+        'subprocess_timeout_s': float(args.subprocess_timeout_s),
+        'matrix_preset': str(args.matrix_preset),
+        'family_maps_json': str(args.family_maps_json),
+        'logic_lane_preset': str(args.logic_lane_preset),
+        'logic_lanes_json': str(args.logic_lanes_json),
+        'bridge_overridden_lanes': bool(args.bridge_overridden_lanes),
+        'force_opponent_actions_from_bridge': bool(
+            args.force_opponent_actions_from_bridge
+        ),
+        'matrix_cases': [asdict(case) for case in matrix_cases],
+        'native_options': dict(native_options),
+        'steady_parity_mode': str(args.steady_parity_mode),
+        'steady_parity_steps': max(int(args.steady_parity_steps), 0),
+        'steady_parity_steps_effective': int(effective_steady_parity_steps),
+        'profiles': [
+            {
+                'name': profile_name,
+                'steps': steps,
+                'warmup_steps': warmup_steps,
+            }
+            for profile_name, steps, warmup_steps in run_profiles
+        ],
+        'results': [asdict(row) for row in results],
+        'summary': summary_by_profile.get(primary_profile, {}),
+        'summary_by_profile': summary_by_profile,
+        'parity': primary_parity,
+        'parity_cases': primary_parity_cases,
+        'parity_by_profile': parity_by_profile,
+        'parity_by_family_profile': parity_by_family_profile,
+        'parity_tolerance': {
+            'atol': float(parity_atol),
+            'rtol': float(parity_rtol),
+        },
+    }
+
+
 def main() -> int:
     _ensure_project_on_path()
     from smac_unified import make_env
@@ -1851,9 +1919,6 @@ def main() -> int:
             profile_name: _aggregate_parity_by_family(profile_payload)
             for profile_name, profile_payload in parity_by_profile.items()
         }
-    primary_profile = run_profiles[0][0]
-    primary_parity = parity_by_family_profile.get(primary_profile, {})
-    primary_parity_cases = parity_by_profile.get(primary_profile, {})
     if bridge_enabled:
         for profile_name, case_payload in parity_by_profile.items():
             for case_id, payload in case_payload.items():
@@ -1867,49 +1932,22 @@ def main() -> int:
                     f"first_field={payload.get('first_mismatch_field', '')} "
                     f"first_step={payload.get('first_mismatch_step', -1)}"
                 )
-    output = {
-        'requested_profile': args.profile,
-        'bridge_lane': 'on' if bridge_enabled else 'off',
-        'seed': int(args.seed),
-        'repeat_seed_stride': int(repeat_seed_stride),
-        'repeats': repeats,
-        'normalized_api': bool(args.normalized_api),
-        'parallel_envs': parallel_envs,
-        'pool_mode': str(args.pool_mode),
-        'subprocess_timeout_s': float(args.subprocess_timeout_s),
-        'matrix_preset': str(args.matrix_preset),
-        'family_maps_json': str(args.family_maps_json),
-        'logic_lane_preset': str(args.logic_lane_preset),
-        'logic_lanes_json': str(args.logic_lanes_json),
-        'bridge_overridden_lanes': bool(args.bridge_overridden_lanes),
-        'force_opponent_actions_from_bridge': bool(
-            args.force_opponent_actions_from_bridge
-        ),
-        'matrix_cases': [asdict(case) for case in matrix_cases],
-        'native_options': native_options,
-        'steady_parity_mode': str(args.steady_parity_mode),
-        'steady_parity_steps': max(int(args.steady_parity_steps), 0),
-        'steady_parity_steps_effective': int(effective_steady_parity_steps),
-        'profiles': [
-            {
-                'name': profile_name,
-                'steps': steps,
-                'warmup_steps': warmup_steps,
-            }
-            for profile_name, steps, warmup_steps in run_profiles
-        ],
-        'results': [asdict(row) for row in results],
-        'summary': summary_by_profile.get(primary_profile, {}),
-        'summary_by_profile': summary_by_profile,
-        'parity': primary_parity,
-        'parity_cases': primary_parity_cases,
-        'parity_by_profile': parity_by_profile,
-        'parity_by_family_profile': parity_by_family_profile,
-        'parity_tolerance': {
-            'atol': parity_atol,
-            'rtol': parity_rtol,
-        },
-    }
+    output = _build_report_payload(
+        args=args,
+        bridge_enabled=bridge_enabled,
+        repeat_seed_stride=repeat_seed_stride,
+        parallel_envs=parallel_envs,
+        matrix_cases=matrix_cases,
+        native_options=native_options,
+        run_profiles=run_profiles,
+        results=results,
+        summary_by_profile=summary_by_profile,
+        parity_by_profile=parity_by_profile,
+        parity_by_family_profile=parity_by_family_profile,
+        parity_atol=parity_atol,
+        parity_rtol=parity_rtol,
+        effective_steady_parity_steps=effective_steady_parity_steps,
+    )
     output_path = Path(args.output_json)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(json.dumps(output, indent=2), encoding='utf-8')
